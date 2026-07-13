@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project id="11" workbook="MOS_Excel2016_Projet11.xlsx" title="Projet 11">
+  <task id="1" points="1">
+    <statement><![CDATA[Dans la feuille de calcul « Achats », supprimez du tableau la colonne contenant les noms des auteurs.]]></statement>
+    <check type="column_absent" sheet="Achats" header="Auteur" header_row="5"/>
+  </task>
+  <task id="2" points="1">
+    <statement><![CDATA[Dans la feuille de calcul « Meilleurs Achats », retirez la fonctionnalité de tableau du tableau. Conservez la mise en forme des polices et cellules et l'emplacement des données.]]></statement>
+    <check type="table_absent" sheet="Meilleurs Achats"/>
+  </task>
+  <task id="3" points="1">
+    <statement><![CDATA[Copiez la plage A9:A12 de la feuille de calcul « Meilleurs Achats » dans la plage A3:A6 de la feuille de calcul « Nouveau Plan ».]]></statement>
+    <check type="range_values" sheet="Nouveau Plan" range="A3:A6"/>
+  </task>
+  <task id="4" points="1">
+    <statement><![CDATA[À partir des données des achats du premier trimestre dans la feuille de calcul « Achats », insérez un Histogramme empilé en 3D pour afficher les achats de « Janvier » à « Mars » pour chaque livre. Les titres des livres doivent être affichés sur l'axe horizontal. Les mois doivent être affichés sous forme de légende. Comme titre du graphique, utilisez « Achats du trimestre 1 ».]]></statement>
+    <check type="chart_exists" chart_type="bar3DChart"/>
+    <check type="chart_titles" title="Achats du trimestre 1"/>
+  </task>
+</project>

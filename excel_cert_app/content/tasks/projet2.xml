@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project id="2" workbook="MOS_Excel2016_Projet2.xlsx" title="Projet 2">
+  <task id="1" points="1">
+    <statement><![CDATA[En commençant à la cellule A5 de la feuille de calcul « Contributeurs -100 », importez les données du fichier source (séparées par des tabulations) Donateurs.txt, situé dans le dossier Projet2. (Acceptez tous les paramètres par défaut.)]]></statement>
+    <check type="range_values" sheet="Contributeurs -100" range="A5:C6"/>
+  </task>
+  <task id="2" points="1">
+    <statement><![CDATA[Accédez à la plage nommée « Génie » de la feuille de calcul « Contributeurs », et supprimez le contenu des cellules sélectionnées.]]></statement>
+    <check type="named_range_empty" name="Génie"/>
+  </task>
+  <task id="3" points="1">
+    <statement><![CDATA[Ajoutez au classeur une nouvelle feuille de calcul nommée « Contributeurs -10 ».]]></statement>
+    <check type="sheet_exists" name="Contributeurs -10"/>
+  </task>
+  <task id="4" points="1">
+    <statement><![CDATA[Dans la feuille de calcul « Contributeurs -10 », créez dans la cellule C3 un lien hypertexte pointant sur l'adresse e-mail « ouaftechno@gmail.com ».]]></statement>
+    <check type="hyperlink" sheet="Contributeurs -10" cell="C3" target="mailto:ouaftechno@gmail.com"/>
+  </task>
+  <task id="5" points="1">
+    <statement><![CDATA[Disposez les feuilles de calcul de manière à positionner en premier la feuille nommée « Contributeurs -10 ».]]></statement>
+    <check type="sheet_order" name="Contributeurs -10" index="0"/>
+  </task>
+</project>

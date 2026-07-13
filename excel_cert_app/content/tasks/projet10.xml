@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project id="10" workbook="MOS_Excel2016_Projet10.xlsx" title="Projet 10">
+  <task id="1" points="1">
+    <statement><![CDATA[Ajoutez une nouvelle feuille de calcul nommée « Trimestre 3 » à droite des feuilles de calcul existantes.]]></statement>
+    <check type="sheet_exists" name="Trimestre 3"/>
+    <check type="sheet_order" name="Trimestre 3" index="-1"/>
+  </task>
+  <task id="2" points="1">
+    <statement><![CDATA[Dans la colonne « STATUT ACHATS » de la feuille de calcul « Trimestre 1 », créez une formule pour afficher « Excellent » si la moyenne des ventes est supérieure ou égale à 800,00 €, ou « Passable » si la moyenne des ventes est inférieure à 800,00 €.]]></statement>
+    <check type="formula_column" sheet="Trimestre 1" column="G" row_start="6" row_end="36" pattern="IF" contains="800"/>
+  </task>
+  <task id="3" points="1">
+    <statement><![CDATA[Dans la colonne « EVOLUTION » de la feuille de calcul « Trimestre 1 », insérez un graphique sparkline en Courbes dans chaque cellule devant afficher une évolution des ventes de « Janvier » à « Mars » du 1er trimestre.]]></statement>
+    <check type="sparkline" sheet="Trimestre 1" spark_type="line"/>
+  </task>
+  <task id="4" points="1">
+    <statement><![CDATA[Dans la feuille de calcul « Trimestre 2 », ajoutez les données de « Juin » au graphique.]]></statement>
+    <check type="chart_series" references="Juin"/>
+  </task>
+  <task id="5" points="1">
+    <statement><![CDATA[Affichez les formules de la feuille de calcul « Trimestre 2 ».]]></statement>
+    <check type="sheet_view_flag" sheet="Trimestre 2" flag="showFormulas" expected="true"/>
+  </task>
+</project>

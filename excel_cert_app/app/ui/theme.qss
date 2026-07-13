@@ -1,0 +1,212 @@
+/* MOS-inspired theme: Excel green + deep blue, clean and legible. */
+
+* {
+    font-family: "Segoe UI", "Noto Sans", "DejaVu Sans", sans-serif;
+    color: #1f2933;
+}
+
+QWidget#Screen {
+    background: qlineargradient(x1:0, y1:0, x2:0.6, y2:1,
+                                stop:0 #0f5aa0, stop:0.55 #0c3f6e,
+                                stop:1 #082b4d);
+}
+
+QLabel#Title {
+    color: #ffffff;
+    font-size: 30px;
+    font-weight: 700;
+}
+
+QLabel#Subtitle {
+    color: #d6e6f5;
+    font-size: 15px;
+}
+
+QLabel#Brand {
+    color: #ffffff;
+    font-size: 40px;
+    font-weight: 800;
+    letter-spacing: 8px;
+}
+
+QLabel#Tagline {
+    color: #9db9d6;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 2px;
+}
+
+QFrame#Card {
+    background: #ffffff;
+    border-radius: 18px;
+}
+
+/* Green rounded logo badge at the top of the card. */
+QLabel#BrandBadge {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                                stop:0 #2a8a55, stop:1 #1c6b3f);
+    color: #ffffff;
+    border-radius: 16px;
+    font-size: 30px;
+    font-weight: 800;
+}
+
+QLabel#CardTitle {
+    font-size: 22px;
+    font-weight: 700;
+    color: #0c3c68;
+}
+
+QLabel#CardSubtitle {
+    font-size: 14px;
+    color: #7b8794;
+}
+
+QLabel#FieldLabel {
+    font-size: 12px;
+    font-weight: 700;
+    color: #52606d;
+    letter-spacing: 0.4px;
+}
+
+/* Inline validation banner inside the card. */
+QLabel#ErrorBanner {
+    background: #fdecee;
+    border: 1px solid #f5c2c7;
+    border-radius: 8px;
+    color: #b0121f;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 10px 12px;
+}
+
+QLineEdit {
+    background: #f5f7fa;
+    border: 1px solid #cbd2d9;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 15px;
+    color: #1f2933;
+    selection-background-color: #217346;
+    selection-color: #ffffff;
+}
+QLineEdit:hover  { border: 1px solid #9aa5b1; }
+QLineEdit:focus {
+    border: 2px solid #217346;
+    background: #ffffff;
+}
+
+QPushButton {
+    background: #217346;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    padding: 11px 22px;
+    font-size: 15px;
+    font-weight: 600;
+}
+QPushButton:hover   { background: #1c6b3f; }
+QPushButton:pressed { background: #175c36; }
+QPushButton:disabled { background: #9fb3ab; color: #eef2ef; }
+
+QPushButton#Primary {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+}
+
+QPushButton#Secondary {
+    background: #e4e7eb;
+    color: #1f2933;
+}
+QPushButton#Secondary:hover { background: #d3d8de; }
+
+/* Discreet admin entry sitting on the dark login background. */
+QPushButton#AdminLink {
+    background: rgba(255, 255, 255, 0.10);
+    color: #cfe0f0;
+    font-weight: 600;
+    padding: 9px 18px;
+    border-radius: 8px;
+}
+QPushButton#AdminLink:hover   { background: rgba(255, 255, 255, 0.20); }
+QPushButton#AdminLink:pressed { background: rgba(255, 255, 255, 0.28); }
+
+QPushButton#Danger {
+    background: #cf1124;
+}
+QPushButton#Danger:hover { background: #ab091e; }
+
+QPushButton#Ghost {
+    background: transparent;
+    color: #cf1124;
+    border: 1px solid #cf1124;
+}
+
+/* ---- Bottom exam task panel ---- */
+QFrame#TaskPanel {
+    background: #0c3c68;
+    border-top: 3px solid #217346;
+}
+QLabel#PanelInfo {
+    color: #ffffff;
+    font-size: 15px;
+    font-weight: 700;
+}
+QLabel#Clock {
+    color: #ffffff;
+    font-size: 22px;
+    font-weight: 800;
+    font-family: "DejaVu Sans Mono", monospace;
+}
+QLabel#ClockLow { color: #ffd166; }
+QScrollArea#StatementScroll {
+    background: #ffffff;
+    border-radius: 8px;
+}
+QScrollArea#StatementScroll > QWidget > QWidget { background: transparent; }
+QLabel#Statement {
+    background: transparent;
+    color: #1f2933;
+    padding: 12px 14px;
+    font-size: 15px;
+}
+QScrollArea#StatementScroll QScrollBar:vertical {
+    background: transparent;
+    width: 10px;
+    margin: 4px 2px 4px 0;
+}
+QScrollArea#StatementScroll QScrollBar::handle:vertical {
+    background: #b7c1cc;
+    border-radius: 5px;
+    min-height: 24px;
+}
+QScrollArea#StatementScroll QScrollBar::handle:vertical:hover { background: #9aa5b1; }
+QScrollArea#StatementScroll QScrollBar::add-line:vertical,
+QScrollArea#StatementScroll QScrollBar::sub-line:vertical { height: 0; }
+QTabBar::tab {
+    background: #14476f;
+    color: #cfe0f0;
+    padding: 8px 16px;
+    margin-right: 3px;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    font-weight: 600;
+}
+QTabBar::tab:selected { background: #ffffff; color: #0c3c68; }
+
+/* ---- Review board cards ---- */
+QFrame#ProjectCard {
+    background: #ffffff;
+    border-radius: 12px;
+    border: 2px solid transparent;
+}
+QFrame#ProjectCard:hover { border: 2px solid #217346; }
+
+/* ---- Results ---- */
+QLabel#ScoreBig {
+    font-size: 72px;
+    font-weight: 800;
+}
+QLabel#VerdictPass { color: #217346; font-size: 30px; font-weight: 800; }
+QLabel#VerdictFail { color: #cf1124; font-size: 30px; font-weight: 800; }

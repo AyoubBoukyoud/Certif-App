@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project id="1" workbook="MOS_Excel2016_Projet1.xlsx" title="Projet 1">
+  <task id="1" points="1">
+    <statement><![CDATA[Dans la feuille de calcul « Étudiants », modifiez la mise en forme du tableau afin qu'une ligne sur deux soit ombrée. Utilisez une technique qui actualisera automatiquement cette mise en forme si vous insérez une nouvelle ligne.]]></statement>
+    <check type="table_style_option" sheet="Étudiants" name="Tableau1" option="showRowStripes" expected="true"/>
+  </task>
+  <task id="2" points="1">
+    <statement><![CDATA[Dans la feuille de calcul « Étudiants », triez le tableau selon le champ « Pays », en mettant en premières positions les Étudiants situés aux États-Unis, puis ceux demeurant au Canada. Triez ensuite les Étudiants dans chaque Pays par ordre alphabétique (de A à Z) sur le champ « Code ». Enfin, triez-les dans chaque Code par ordre croissant sur le champ « Matricule ».]]></statement>
+    <check type="sort_order" sheet="Étudiants" by="Pays:asc,Code:asc,Matricule:asc" custom_order="États-Unis|Canada"/>
+  </task>
+  <task id="3" points="1">
+    <statement><![CDATA[Dans la feuille de calcul « Étudiants », saisissez dans la cellule N2 une formule utilisant une fonction d'Excel pour renvoyer l'âge moyen des clients à partir des valeurs de la colonne « Âge ».]]></statement>
+    <check type="formula" sheet="Étudiants" cell="N2" pattern="AVERAGE" contains="K" expected_value="from_solution" tolerance="0.5"/>
+  </task>
+  <task id="4" points="1">
+    <statement><![CDATA[Dans la feuille de calcul « Articles », appliquez une mise en forme numérique pour afficher les nombres de la colonne « Quantité » avec trois décimales.]]></statement>
+    <check type="number_format" sheet="Articles" range="E2:E32" contains="0.000"/>
+  </task>
+  <task id="5" points="1">
+    <statement><![CDATA[Dans la feuille de calcul « Informations de commande », utilisez une méthode de mise en forme automatique pour appliquer un Remplissage vert avec texte vert foncé aux cellules de la colonne « TotalCommande » contenant des valeurs supérieures à la moyenne. Utilisez une technique qui actualisera automatiquement la mise en forme si les valeurs de cette colonne changent.]]></statement>
+    <check type="conditional_formatting" sheet="Informations de commande" rule_type="aboveAverage" range="G2:G526"/>
+  </task>
+  <task id="6" points="1">
+    <statement><![CDATA[Dans la feuille de calcul « Informations de commande », saisissez dans la cellule J2 une formule utilisant une fonction Excel pour renvoyer la valeur la plus élevée des cellules « TotalCommande ».]]></statement>
+    <check type="formula" sheet="Informations de commande" cell="J2" pattern="MAX" contains="G" expected_value="from_solution" tolerance="0.01"/>
+  </task>
+  <task id="7" points="1">
+    <statement><![CDATA[Dans la feuille de calcul « DateEmploi », utilisez un outil de traitement de données Excel pour supprimer du tableau tous les enregistrements contenant des valeurs dupliquées pour le champ « N.Nationale ». Ne supprimez aucun autre enregistrement.]]></statement>
+    <check type="dedup_rows" sheet="DateEmploi" key="N.Nationale"/>
+  </task>
+</project>

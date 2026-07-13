@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project id="3" workbook="MOS_Excel2016_Projet3.xlsx" title="Projet 3">
+  <task id="1" points="1">
+    <statement><![CDATA[Mettez les marges haute et basse à 3,25 cm, les marges gauche et droite à 1,90 cm, puis les en-tête et pied de page à 2,31 cm.]]></statement>
+    <check type="page_margins" sheet="Fournitures scolaires" top_cm="3.25" bottom_cm="3.25" left_cm="1.90" right_cm="1.90" header_cm="2.31" footer_cm="2.31"/>
+  </task>
+  <task id="2" points="1">
+    <statement><![CDATA[Masquez les lignes 29 et 30.]]></statement>
+    <check type="hidden_rows" sheet="Fournitures scolaires" rows="29,30"/>
+  </task>
+  <task id="3" points="1">
+    <statement><![CDATA[Configurez la feuille de calcul afin que la ligne 9 et l'objet Word Art restent visibles lorsque vous faites défiler la feuille verticalement.]]></statement>
+    <check type="freeze_panes" sheet="Fournitures scolaires" cell="A10"/>
+  </task>
+  <task id="4" points="1">
+    <statement><![CDATA[Vérifiez que la feuille de calcul ne pose pas de problèmes d'accessibilité. Corrigez l'erreur de la zone de texte en ajoutant « Fourniture scolaire » comme titre de texte de remplacement.]]></statement>
+    <check type="shape_alt_text" title="Fourniture scolaire" field="title"/>
+  </task>
+</project>

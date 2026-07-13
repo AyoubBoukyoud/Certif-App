@@ -1,0 +1,44 @@
+What was built
+
+A complete, working desktop app in excel_cert_app/ implementing the PLAN. The guiding principle held throughout: the candidate works in the real Microsoft Excel — the app is a kiosk shell + bottom task panel + offline grading engine, never a spreadsheet clone.
+
+Verified working:
+- 22 pytest tests pass — unit (formula locale, timer, security), database/DAO, an end-to-end session-flow smoke test, and 12 calibration-style grading tests that prove checkers flip from fail on the pristine file to pass on an edited file.
+- All 5 screens render correctly (I checked the images): registration, instructions, the exam task panel, review board, results.
+- The full AppController boots to registration, selects the right platform controllers, and engages the kiosk.
+- All 13 content files load and grade against the real workbooks with zero checker errors across 61 tasks.
+
+Architecture delivered
+
+┌────────────────┬───────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│     Layer      │                                             What it does                                              │
+├────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ app/db/        │ SQLite (candidates, sessions, per-task results, audit log) + resultats.xlsx export with a locked-file │
+│                │  fallback                                                                                             │
+├────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ app/exam/      │ Session state machine, wall-clock timer (crash-resume recomputes remaining time), variant A/B         │
+│                │ selection, per-session work copies                                                                    │
+├────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ app/excel/     │ Excel abstraction: real pywin32 COM controller on Windows, dev stub on Linux                          │
+├────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ app/grading/   │ Engine + 37 checkers (openpyxl + raw lxml for charts/sparklines/alt-text/doc-props), FR↔EN formula    │
+│                │ normalization                                                                                         │
+├────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ content/tasks/ │ All 13 projects authored as XML with faithful French statements + checks, using the actual sheet      │
+│                │ names/columns I verified in the workbooks                                                             │
+├────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ app/ui/        │ PyQt6 screens + MOS-themed stylesheet + the orchestrating controller                                  │
+├────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ app/kiosk/     │ Windows keyboard-hook + focus watchdog, no-op fallback elsewhere; admin-code logout                   │
+└────────────────┴───────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+The Windows-only code (COM, keyboard hooks) imports cleanly on Linux via deferred imports, so development and grading are fully testable here; those layers activate on the real exam machines.
+
+The one thing that still needs you
+
+Calibration — I could not perform the ~61 tasks in real Excel from Linux, so content/solutions/*.xlsx don't exist yet. Right now value-based and chart-style checks verify shape (correct function/chart type) but not the exact computed value. To finish: open each pristine workbook in Excel, do the tasks, save into content/solutions/. The README documents this and the specific ambiguities I found (notably P4 task 3: the statement says 95% but the official answer uses ×90% — you need to decide which is authoritative).
+
+To run it: cd excel_cert_app && pip install -r requirements.txt && python main.py (first launch asks you to set the admin code). I did not launch the real fullscreen kiosk window here since it would have taken over your screen while you're away — the offscreen renders and tests confirmed the flow instead.
+
+
+cd "/home/ayoub/Projects/Desktop app office/excel_cert_app" && ../.venv/bin/python main.py

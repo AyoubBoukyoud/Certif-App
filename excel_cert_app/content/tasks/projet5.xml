@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project id="5" workbook="MOS_Excel2016_Projet5.xlsx" title="Projet 5">
+  <task id="1" points="1">
+    <statement><![CDATA[Dans la feuille de calcul « Éducation physique », insérez un graphique sparkline Histogramme pour chaque sport comportant des inscriptions au cours des cinq derniers trimestres (colonne de la tendance).]]></statement>
+    <check type="sparkline" sheet="Éducation physique" spark_type="column"/>
+  </task>
+  <task id="2" points="1">
+    <statement><![CDATA[Dans la feuille de calcul « Programme Annuel », créez un tableau pour la plage de cellules A9:G19. Incluez la ligne 9 comme ligne d'en-tête.]]></statement>
+    <check type="table_exists" sheet="Programme Annuel" ref="A9:G19"/>
+  </task>
+  <task id="3" points="1">
+    <statement><![CDATA[Affichez la feuille de calcul « Conclusion ».]]></statement>
+    <check type="sheet_visible" name="Conclusion"/>
+  </task>
+  <task id="4" points="1">
+    <statement><![CDATA[Ajoutez le titre de texte de remplacement « Inscriptions des athlètes » au tableau « Educationphysique ».]]></statement>
+    <check type="table_alt_text" title="Inscriptions des athlètes"/>
+  </task>
+</project>

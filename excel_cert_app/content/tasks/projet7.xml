@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project id="7" workbook="MOS_Excel2016_Projet7.xlsx" title="Projet 7">
+  <task id="1" points="1">
+    <statement><![CDATA[Dans la feuille de calcul « Consommation », utilisez uniquement les données des colonnes « Produits » et « Total » pour créer un graphique en secteurs 3D (graphique camembert en 3D). Positionnez le nouveau graphique à droite des histogrammes.]]></statement>
+    <check type="chart_exists" chart_type="pie3DChart"/>
+  </task>
+  <task id="2" points="1">
+    <statement><![CDATA[Dans la feuille de calcul « Consommation », ajoutez la série de données « Total » à l'histogramme « Graphique trimestriel ».]]></statement>
+    <check type="chart_series" min_series="2"/>
+  </task>
+  <task id="3" points="1">
+    <statement><![CDATA[Dans la feuille de calcul « Données », ajoutez le titre « Nouveaux repas » à l'histogramme. Libellez l'axe vertical « Aliments » et l'axe horizontal « Consommation ».]]></statement>
+    <check type="chart_titles" title="Nouveaux repas" value_axis="Aliments" cat_axis="Consommation"/>
+  </task>
+  <task id="4" points="1">
+    <statement><![CDATA[Dans la feuille de calcul « Données », appliquez le Style 3 et la couleur monochrome 2 au graphique en secteurs 3D (graphique camembert en 3D).]]></statement>
+    <!-- Style de graphique : vérification approximative (présence du secteur 3D) en attendant la calibration. -->
+    <check type="chart_exists" chart_type="pie3DChart"/>
+  </task>
+  <task id="5" points="1">
+    <statement><![CDATA[Dans la feuille de calcul « Données », intervertissez les lignes et les colonnes de l'histogramme.]]></statement>
+    <!-- Interversion lignes/colonnes : vérification approximative (présence d'un histogramme) en attendant la calibration. -->
+    <check type="chart_exists" chart_type="barChart"/>
+  </task>
+</project>

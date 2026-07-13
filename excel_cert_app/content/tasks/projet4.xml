@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project id="4" workbook="MOS_Excel2016_Projet4.xlsx" title="Projet 4">
+  <task id="1" points="1">
+    <statement><![CDATA[Configurez la feuille de calcul « Achat de moteurs » afin que les en-têtes de colonne en ligne 9 apparaissent sur toutes les pages imprimées.]]></statement>
+    <check type="print_titles" sheet="Achat de moteurs" rows="9:9"/>
+  </task>
+  <task id="2" points="1">
+    <statement><![CDATA[Remplacez simultanément toutes les instances du texte « Pick-up » par le texte « Caravane ».]]></statement>
+    <check type="text_absent_present" absent="Pick-up" present="Caravane"/>
+  </task>
+  <task id="3" points="1">
+    <statement><![CDATA[Le prix réduit est de 95 % du prix normal. Modifiez la colonne J pour afficher le prix réduit de chaque véhicule.]]></statement>
+    <!-- Enoncé : 95 % ; le corrigé officiel utilise G*90 %. On accepte les deux (à confirmer en calibration). -->
+    <check type="formula_column" sheet="Achat de moteurs" column="J" row_start="10" pattern="G\d+\*(0\.9|0\.95|90%|95%)"/>
+  </task>
+  <task id="4" points="1">
+    <statement><![CDATA[Appliquez le Brun tanné, Style de tableau clair 17 (Style de tableau clair 17) au tableau « Achat ».]]></statement>
+    <check type="table_style_name" sheet="Achat de moteurs" style="TableStyleLight17"/>
+  </task>
+</project>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project id="12" workbook="MOS_Excel2016_Projet12.xlsx" title="Academy">
+  <task id="1" points="1">
+    <statement><![CDATA[Modifiez la colonne D afin de masquer les valeurs du champ « CODE ouvrier ».]]></statement>
+    <check type="hidden_cols" sheet="Academy" cols="D"/>
+  </task>
+  <task id="2" points="1">
+    <statement><![CDATA[Dans la colonne L, utilisez une fonction pour afficher les prénoms en lettres minuscules.]]></statement>
+    <check type="formula_column" sheet="Academy" column="L" row_start="8" row_end="69" pattern="LOWER"/>
+  </task>
+  <task id="3" points="1">
+    <statement><![CDATA[Accédez à la plage nommée « Aka_Regional » et supprimez le contenu des cellules sélectionnées.]]></statement>
+    <check type="named_range_empty" name="Aka_Regional"/>
+  </task>
+  <task id="4" points="1">
+    <statement><![CDATA[Configurez la feuille de calcul « Academy » de manière à faire apparaître sur toutes les pages imprimées les en-têtes de colonne dans la ligne 7.]]></statement>
+    <check type="print_titles" sheet="Academy" rows="7:7"/>
+  </task>
+</project>

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project id="6" workbook="MOS_Excel2016_Projet6.xlsx" title="Les Forums">
+  <task id="1" points="1">
+    <statement><![CDATA[Dans la cellule K10 de la feuille de calcul « Les Forums », insérez une fonction pour calculer le nombre de groupes de 12 personnes ou plus, même si l'ordre des lignes est modifié.]]></statement>
+    <check type="formula" sheet="Les Forums" cell="K10" pattern="COUNTIF" contains="&quot;>=12&quot;"/>
+  </task>
+  <task id="2" points="1">
+    <statement><![CDATA[Dans la cellule K11 de la feuille de calcul « Les Forums », insérez une fonction pour calculer le montant total des ventes à partir de la colonne « Total » pour les groupes de 12 personnes ou plus, même si l'ordre des lignes est modifié.]]></statement>
+    <check type="formula" sheet="Les Forums" cell="K11" pattern="SUMIF" contains="&quot;>=12&quot;"/>
+  </task>
+  <task id="3" points="1">
+    <statement><![CDATA[Dans la cellule C8 de la feuille de calcul « Les Forums », insérez une fonction pour regrouper le « Nom » et le « Prénom » du Donneur, en les séparant par une virgule et un espace. (Exemple : Campbell, David).]]></statement>
+    <any>
+      <check type="formula" sheet="Les Forums" cell="C8" pattern="CONCATENATE"/>
+      <check type="formula" sheet="Les Forums" cell="C8" pattern="CONCAT"/>
+      <check type="formula" sheet="Les Forums" cell="C8" pattern="&amp;"/>
+    </any>
+  </task>
+  <task id="4" points="1">
+    <statement><![CDATA[Dans la feuille de calcul « Les Forums », retirez la fonctionnalité de tableau du tableau. Conservez la mise en forme des cellules et l'emplacement des données.]]></statement>
+    <check type="table_absent" sheet="Les Forums"/>
+  </task>
+  <task id="5" points="1">
+    <statement><![CDATA[Insérez une numérotation des pages au centre du pied de page de la feuille de calcul « Les Forums », en utilisant le format Page 1 de ?.]]></statement>
+    <check type="header_footer" sheet="Les Forums" part="footer" position="center" page_of_total="true"/>
+  </task>
+</project>

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project id="9" workbook="MOS_Excel2016_Projet9.xlsx" title="Projet 9">
+  <task id="1" points="1">
+    <statement><![CDATA[Dans les propriétés du document, ajoutez « Salon International » comme nom de la société.]]></statement>
+    <check type="doc_property" property="Company" value="Salon International"/>
+  </task>
+  <task id="2" points="1">
+    <statement><![CDATA[La différence est égale au prix de vente moins le coût. Dans la feuille de calcul « Achats annuels », ajoutez aux cellules de la colonne « Différence » une formule calculant la différence sur chaque livre. La mise en forme de la colonne ne doit pas changer.]]></statement>
+    <check type="formula_column" sheet="Achats annuels" column="H" row_start="5" row_end="36" pattern="F\d+\s*-\s*G\d+"/>
+  </task>
+  <task id="3" points="1">
+    <statement><![CDATA[Dans la cellule F37 de la feuille de calcul « Achats annuels », utilisez une fonction Excel pour calculer le prix de vente moyen des livres publiés par « Fabrikam, Inc. ».]]></statement>
+    <check type="formula" sheet="Achats annuels" cell="F37" pattern="AVERAGEIF"/>
+  </task>
+  <task id="4" points="1">
+    <statement><![CDATA[Déplacez l'onglet de la feuille « Achats annuels » pour l'insérer entre les onglets « Œuvres » et « titres ».]]></statement>
+    <check type="sheet_order" name="Achats annuels" after="Oeuvres" before="Titres"/>
+  </task>
+  <task id="5" points="1">
+    <statement><![CDATA[Dans la feuille de calcul « Œuvres », ajustez la rotation de l'image à 0 degré.]]></statement>
+    <check type="image_rotation" degrees="0"/>
+  </task>
+</project>

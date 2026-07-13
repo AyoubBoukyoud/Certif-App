@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project id="8" workbook="MOS_Excel2016_Projet8.xlsx" title="Projet 8">
+  <task id="1" points="1">
+    <statement><![CDATA[Dans la feuille de calcul « Ingrédients », modifiez la plage de cellules A1:N1 en les fusionnant en une seule cellule sans changer l'alignement du texte.]]></statement>
+    <check type="merged_range" sheet="Ingrédients" range="A1:N1"/>
+  </task>
+  <task id="2" points="1">
+    <statement><![CDATA[Dans la feuille de calcul « Ingrédients », ajustez la largeur de toutes les colonnes A:N pour les adapter automatiquement au contenu le plus long.]]></statement>
+    <check type="column_widths_changed" sheet="Ingrédients" range="A1:N1"/>
+  </task>
+  <task id="3" points="1">
+    <statement><![CDATA[Dans la feuille de calcul « Ingrédients », insérez l'en-tête « Séquentiel » sur le côté droit de chaque page.]]></statement>
+    <check type="header_footer" sheet="Ingrédients" part="header" position="right" contains="Séquentiel"/>
+  </task>
+  <task id="4" points="1">
+    <statement><![CDATA[Dans la feuille de calcul « Ingrédients », créez dans la cellule A6 un lien hypertexte pointant vers la cellule A18 de la feuille de calcul « Description ».]]></statement>
+    <check type="hyperlink" sheet="Ingrédients" cell="A6" location="Description!A18"/>
+  </task>
+  <task id="5" points="1">
+    <statement><![CDATA[Modifiez les paramètres d'impression de la feuille de calcul « Ingrédients » afin d'imprimer toutes les colonnes sur une seule page avec l'orientation Paysage.]]></statement>
+    <check type="page_setup" sheet="Ingrédients" orientation="landscape" fit_to_width="1"/>
+  </task>
+</project>
