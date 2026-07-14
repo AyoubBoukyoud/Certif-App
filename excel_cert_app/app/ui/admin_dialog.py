@@ -52,12 +52,15 @@ class AdminSetupDialog(QDialog):
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save)
         buttons.accepted.connect(self._save)
+        buttons.button(QDialogButtonBox.StandardButton.Save).setDefault(True)
 
         lay = QVBoxLayout(self)
         lay.addWidget(QLabel("Définissez le code administrateur et les paramètres."))
         lay.addLayout(form)
         lay.addWidget(self.error)
         lay.addWidget(buttons)
+
+        self.code1.setFocus()
 
     def _save(self) -> None:
         c1, c2 = self.code1.text(), self.code2.text()
@@ -107,6 +110,8 @@ class AdminCodeDialog(QDialog):
         lay.addWidget(self.error)
         lay.addLayout(self.menu)
 
+        self.code.setFocus()
+
     def _verify(self) -> None:
         if self._attempts >= _MAX_ATTEMPTS:
             return
@@ -128,18 +133,27 @@ class AdminCodeDialog(QDialog):
         self.code.setEnabled(False)
         self.error.clear()
 
+        first_btn: QPushButton | None = None
+
         def make(text, action, obj=""):
+            nonlocal first_btn
             b = QPushButton(text)
             if obj:
                 b.setObjectName(obj)
+            b.setAutoDefault(True)
             b.clicked.connect(lambda: self._choose(action))
             self.menu.addWidget(b)
+            if first_btn is None:
+                first_btn = b
 
         if self._in_exam:
             make("Abandonner la session", "abort", "Danger")
         make("Exporter les résultats", "export", "Secondary")
         make("Paramètres", "settings", "Secondary")
         make("Quitter l'application", "quit", "Danger")
+
+        if first_btn is not None:
+            first_btn.setFocus()
 
     def _choose(self, action: str) -> None:
         self.result_action = action

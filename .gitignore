@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+ENV/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# OS-specific
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# App-specific runtime
+*.sqlite3
+excel_cert_app/excel_cert.sqlite3
+work/
+logs/
+archive/
+resultats.xlsx
+resultats_*.xlsx

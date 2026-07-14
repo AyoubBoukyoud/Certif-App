@@ -54,6 +54,7 @@ class InstructionsScreen(QWidget):
         self.start_btn = QPushButton("Démarrer le test")
         self.start_btn.setMinimumHeight(50)
         self.start_btn.setMinimumWidth(240)
+        self.start_btn.setAutoDefault(True)
         self.start_btn.clicked.connect(self.start_clicked.emit)
         btn_row = QHBoxLayout()
         btn_row.addStretch(1)
@@ -73,3 +74,6 @@ class InstructionsScreen(QWidget):
 
     def set_candidate(self, first: str, last: str, variant: str) -> None:
         self._name_lbl.setText(f"Candidat : {first} {last}  ·  Épreuve {variant}")
+
+    def focus_default(self) -> None:
+        self.start_btn.setFocus()

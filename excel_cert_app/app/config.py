@@ -57,8 +57,8 @@ ORG_NAME: str = "MOS"
 # The bottom task panel takes this fraction of the screen height (Excel gets the
 # rest). 0.25 -> panel = 1/4 of the screen, Excel = 3/4.
 PANEL_HEIGHT_FRACTION: float = 0.25
-PANEL_MIN_HEIGHT: int = 190                # px floor for very short screens
-PANEL_HEIGHT: int = 190                    # fallback when no screen size is known
+PANEL_MIN_HEIGHT: int = 260                # px floor for very short screens
+PANEL_HEIGHT: int = 260                    # fallback when no screen size is known
 LOW_TIME_WARNING_S: int = 300              # clock turns red under 5 minutes
 
 

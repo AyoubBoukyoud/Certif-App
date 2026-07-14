@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS candidates (
     first_name  TEXT NOT NULL,
     last_name   TEXT NOT NULL,
     cin         TEXT NOT NULL,
-    phone       TEXT NOT NULL,
+    birth_date  TEXT,
+    institution TEXT,
     created_at  TEXT NOT NULL
 );
 

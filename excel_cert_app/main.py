@@ -10,7 +10,6 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from pathlib import Path
 
 
 def _prefer_xwayland() -> None:
@@ -35,12 +34,6 @@ from app import config  # noqa: E402
 from app.ui.app_controller import AppController  # noqa: E402
 
 
-def _load_stylesheet(app: QApplication) -> None:
-    qss = Path(__file__).parent / "app" / "ui" / "theme.qss"
-    if qss.exists():
-        app.setStyleSheet(qss.read_text(encoding="utf-8"))
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description="Simulateur de certification Excel")
     parser.add_argument("--unlock", action="store_true",
@@ -62,7 +55,6 @@ def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName(config.APP_NAME)
     app.setOrganizationName(config.ORG_NAME)
-    _load_stylesheet(app)
 
     controller = AppController(app)
     controller.start(resume=not args.no_resume)

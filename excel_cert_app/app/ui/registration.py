@@ -3,11 +3,15 @@ from __future__ import annotations
 
 import re
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import QDate, Qt, pyqtSignal
 from PyQt6.QtWidgets import (
+    QComboBox,
+    QDateEdit,
+    QFrame,
     QHBoxLayout,
     QLineEdit,
     QPushButton,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -15,7 +19,13 @@ from PyQt6.QtWidgets import (
 from . import widgets
 
 CIN_RE = re.compile(r"^[A-Z]{1,2}[0-9]{4,8}$")
-PHONE_RE = re.compile(r"^0[5-7][0-9]{8}$")
+
+INSTITUTIONS = [
+    "INSTITUT SPECIALISE DE TECHNOLOGIE APPLIQUEE AIN AOUDA",
+    "INSTITUT SPECIALISE DE TECHNOLOGIE APPLIQUEE AIN ATIQ",
+    "INSTITUT SPECIALISE DE TECHNOLOGIE APPLIQUEE MULTISECTORIEL TEMARA",
+    "INSTITUT SPECIALISE DE TECHNOLOGIE APPLIQUEE TEMARA",
+]
 
 
 def _field(label_text: str, editor: QLineEdit) -> QWidget:
@@ -33,6 +43,7 @@ def _field(label_text: str, editor: QLineEdit) -> QWidget:
 class RegistrationScreen(QWidget):
     submitted = pyqtSignal(str, str, str, str)  # first, last, cin, phone
     admin_requested = pyqtSignal()
+    quick_test_requested = pyqtSignal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -99,6 +110,7 @@ class RegistrationScreen(QWidget):
         self.start_btn.setObjectName("Primary")
         self.start_btn.setMinimumHeight(50)
         self.start_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.start_btn.setAutoDefault(True)
         self.start_btn.clicked.connect(self._on_submit)
         inner.addWidget(self.start_btn)
 
@@ -112,11 +124,27 @@ class RegistrationScreen(QWidget):
         admin.setObjectName("AdminLink")
         admin.setCursor(Qt.CursorShape.PointingHandCursor)
         admin.clicked.connect(self.admin_requested.emit)
+
+        quick_test = QPushButton("Test rapide")
+        quick_test.setObjectName("QuickTestLink")
+        quick_test.setCursor(Qt.CursorShape.PointingHandCursor)
+        quick_test.clicked.connect(self.quick_test_requested.emit)
+
         admin_row = QHBoxLayout()
+        admin_row.addWidget(quick_test)
         admin_row.addStretch(1)
         admin_row.addWidget(admin)
 
-        outer = QVBoxLayout(self)
+        # ---- Keyboard navigation: Tab walks the form top to bottom ----
+        self.setTabOrder(self.first, self.last)
+        self.setTabOrder(self.last, self.cin)
+        self.setTabOrder(self.cin, self.phone)
+        self.setTabOrder(self.phone, self.start_btn)
+        self.setTabOrder(self.start_btn, quick_test)
+        self.setTabOrder(quick_test, admin)
+
+        content = QWidget()
+        outer = QVBoxLayout(content)
         outer.setContentsMargins(40, 28, 40, 22)
         outer.addStretch(2)
         outer.addWidget(brand)
@@ -126,12 +154,27 @@ class RegistrationScreen(QWidget):
         outer.addStretch(3)
         outer.addLayout(admin_row)
 
+        # ---- Scroll wrapper: guarantees every element stays reachable
+        # even if the window is smaller than the content needs. ----
+        scroll = QScrollArea()
+        scroll.setObjectName("FormScroll")
+        scroll.setWidget(content)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.addWidget(scroll)
+
     def reset(self) -> None:
         for e in (self.first, self.last, self.cin, self.phone):
             e.clear()
         self.error.clear()
         self.error.setVisible(False)
         self._warned = False
+
+    def focus_default(self) -> None:
         self.first.setFocus()
 
     def _show_error(self, msg: str) -> None:

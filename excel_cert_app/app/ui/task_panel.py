@@ -27,6 +27,8 @@ from . import widgets
 class TaskPanel(QWidget):
     submit_project = pyqtSignal()
     logout_requested = pyqtSignal()
+    quit_requested = pyqtSignal()
+    theme_toggle_requested = pyqtSignal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -46,24 +48,42 @@ class TaskPanel(QWidget):
         root.setContentsMargins(18, 10, 18, 12)
         root.setSpacing(8)
 
-        # -- top strip --
+        # -- top strip: project/clock on one row, actions on their own row
+        # below so labels and buttons never crowd each other on narrower
+        # screens. --
         self.info = widgets.label("Projet 1 sur 7", "PanelInfo")
+        self.info.setMinimumWidth(0)
         self.clock = QLabel("50:00")
         self.clock.setObjectName("Clock")
+
+        top = QHBoxLayout()
+        top.setSpacing(12)
+        top.addWidget(self.info, 1)
+        top.addWidget(self.clock, 0)
+        root.addLayout(top)
+
+        self.theme_btn = QPushButton("🌙")
+        self.theme_btn.setObjectName("ThemeToggle")
+        self.theme_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.theme_btn.setToolTip("Changer de thème")
+        self.theme_btn.clicked.connect(self.theme_toggle_requested.emit)
         submit = QPushButton("Soumettre le projet")
         submit.clicked.connect(self._confirm_submit)
         logout = QPushButton("Déconnexion")
         logout.setObjectName("Secondary")
         logout.clicked.connect(self.logout_requested.emit)
+        quit_btn = QPushButton("Quitter")
+        quit_btn.setObjectName("Danger")
+        quit_btn.clicked.connect(self.quit_requested.emit)
 
-        top = QHBoxLayout()
-        top.addWidget(self.info)
-        top.addStretch(1)
-        top.addWidget(self.clock)
-        top.addSpacing(20)
-        top.addWidget(logout)
-        top.addWidget(submit)
-        root.addLayout(top)
+        actions = QHBoxLayout()
+        actions.setSpacing(8)
+        actions.addWidget(self.theme_btn)
+        actions.addStretch(1)
+        actions.addWidget(quit_btn)
+        actions.addWidget(logout)
+        actions.addWidget(submit)
+        root.addLayout(actions)
 
         # -- task tabs --
         self.tabs = QTabBar()
@@ -113,6 +133,9 @@ class TaskPanel(QWidget):
         bottom.addStretch(1)
         bottom.addWidget(self.next_btn)
         root.addLayout(bottom)
+
+    def set_theme_label(self, label: str) -> None:
+        self.theme_btn.setToolTip(label)
 
     # -- data binding ------------------------------------------------------
 

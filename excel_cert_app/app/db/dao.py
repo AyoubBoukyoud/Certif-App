@@ -30,7 +30,8 @@ class Candidate:
     first_name: str
     last_name: str
     cin: str
-    phone: str
+    birth_date: str | None
+    institution: str | None
 
 
 @dataclass
@@ -69,6 +70,33 @@ class Database:
 
     def _apply_schema(self) -> None:
         self.conn.executescript(_SCHEMA.read_text(encoding="utf-8"))
+        self.conn.commit()
+        self._migrate_candidates_table()
+
+    def _migrate_candidates_table(self) -> None:
+        """Upgrade a pre-existing ``candidates`` table (created before the
+        birth_date/institution fields replaced phone) in place."""
+        cols = {row["name"] for row in
+                self.conn.execute("PRAGMA table_info(candidates)").fetchall()}
+        if "birth_date" in cols and "institution" in cols and "phone" not in cols:
+            return  # already on the current schema
+        self.conn.executescript(
+            """
+            CREATE TABLE candidates_new (
+                id          INTEGER PRIMARY KEY,
+                first_name  TEXT NOT NULL,
+                last_name   TEXT NOT NULL,
+                cin         TEXT NOT NULL,
+                birth_date  TEXT,
+                institution TEXT,
+                created_at  TEXT NOT NULL
+            );
+            INSERT INTO candidates_new (id, first_name, last_name, cin, created_at)
+                SELECT id, first_name, last_name, cin, created_at FROM candidates;
+            DROP TABLE candidates;
+            ALTER TABLE candidates_new RENAME TO candidates;
+            """
+        )
         self.conn.commit()
 
     def close(self) -> None:
@@ -117,12 +145,13 @@ class Database:
     # -- candidates --------------------------------------------------------
 
     def create_candidate(
-        self, first_name: str, last_name: str, cin: str, phone: str
+        self, first_name: str, last_name: str, cin: str,
+        birth_date: str, institution: str,
     ) -> int:
         cur = self.conn.execute(
-            "INSERT INTO candidates(first_name, last_name, cin, phone, created_at) "
-            "VALUES(?, ?, ?, ?, ?)",
-            (first_name, last_name, cin, phone, _now()),
+            "INSERT INTO candidates(first_name, last_name, cin, birth_date, "
+            "institution, created_at) VALUES(?, ?, ?, ?, ?, ?)",
+            (first_name, last_name, cin, birth_date, institution, _now()),
         )
         self.conn.commit()
         return int(cur.lastrowid)
@@ -134,7 +163,8 @@ class Database:
         if not row:
             return None
         return Candidate(
-            row["id"], row["first_name"], row["last_name"], row["cin"], row["phone"]
+            row["id"], row["first_name"], row["last_name"], row["cin"],
+            row["birth_date"], row["institution"],
         )
 
     # -- sessions ----------------------------------------------------------

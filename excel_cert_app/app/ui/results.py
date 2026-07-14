@@ -52,7 +52,9 @@ class ResultsScreen(QWidget):
         next_btn = QPushButton("Candidat suivant")
         next_btn.setMinimumHeight(48)
         next_btn.setMinimumWidth(220)
+        next_btn.setAutoDefault(True)
         next_btn.clicked.connect(self.next_candidate.emit)
+        self.next_btn = next_btn
         btn_row = QHBoxLayout()
         btn_row.addStretch(1)
         btn_row.addWidget(next_btn)
@@ -96,3 +98,6 @@ class ResultsScreen(QWidget):
             self.breakdown.addWidget(
                 widgets.label(f"Projet {pno} — {name} : {p}/{tot}", "FieldLabel")
             )
+
+    def focus_default(self) -> None:
+        self.next_btn.setFocus()

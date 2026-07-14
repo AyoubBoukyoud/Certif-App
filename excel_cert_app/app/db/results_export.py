@@ -11,7 +11,7 @@ from pathlib import Path
 from openpyxl import Workbook, load_workbook
 
 HEADER = [
-    "Date", "Prénom", "Nom", "CIN", "Téléphone",
+    "Date", "Prénom", "Nom", "CIN", "Date de naissance", "Établissement",
     "Variante", "Durée (min)", "Score %", "Résultat",
 ]
 
@@ -34,7 +34,8 @@ def append_result(
     first_name: str,
     last_name: str,
     cin: str,
-    phone: str,
+    birth_date: str,
+    institution: str,
     variant: str,
     duration_s: int,
     score_pct: float,
@@ -46,7 +47,7 @@ def append_result(
 
     row = [
         datetime.now().strftime("%Y-%m-%d %H:%M"),
-        first_name, last_name, cin, phone, variant,
+        first_name, last_name, cin, birth_date, institution, variant,
         round(duration_s / 60, 1),
         round(score_pct, 1),
         "RÉUSSI" if passed else "ÉCHOUÉ",

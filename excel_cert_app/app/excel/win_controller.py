@@ -48,6 +48,10 @@ class WinExcelController(ExcelController):
         self._wb = self._excel.Workbooks.Open(str(Path(path).resolve()))
         self._excel.Visible = True
         try:
+            self._wb.Windows(1).WindowState = -4143  # xlNormal, so we can position it
+        except Exception:
+            pass
+        try:
             self._excel.WindowState = -4143  # xlNormal, so we can position it
         except Exception:
             pass
@@ -57,17 +61,28 @@ class WinExcelController(ExcelController):
     def _hwnd(self):
         # Excel.Application.Hwnd is the handle of this instance's main window,
         # so we target exactly our process rather than guessing via EnumWindows.
+        # Right after Workbooks.Open the property can briefly raise before the
+        # new document window is fully registered, so fall back to scanning
+        # our own top-level XLMAIN windows rather than giving up.
         try:
             return int(self._excel.Hwnd)
         except Exception:
-            return None
+            pass
+        handles = self.excel_window_handles()
+        return handles[0] if handles else None
 
     def position_window(self, x: int, y: int, width: int, height: int) -> None:
+        import win32con
         import win32gui
 
         hwnd = self._hwnd()
-        if hwnd:
-            win32gui.MoveWindow(hwnd, x, y, width, height, True)
+        if not hwnd:
+            return
+        # A window left in a maximized/minimized state ignores an explicit
+        # resize request, so force it back to normal before moving it.
+        win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+        win32gui.MoveWindow(hwnd, x, y, width, height, True)
+        win32gui.SetForegroundWindow(hwnd)
 
     # -- save / close ------------------------------------------------------
 

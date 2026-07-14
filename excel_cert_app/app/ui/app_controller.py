@@ -15,7 +15,11 @@ from PyQt6.QtWidgets import (
     QApplication,
     QMainWindow,
     QMessageBox,
+    QPushButton,
+    QSizePolicy,
     QStackedWidget,
+    QToolBar,
+    QWidget,
 )
 
 from .. import config, excel, kiosk
@@ -23,7 +27,9 @@ from ..db import results_export
 from ..db.dao import Database
 from ..exam.session import ExamSession, ExamState
 from ..exam import variants, workdir
+from . import theme
 from .admin_dialog import AdminCodeDialog, AdminSetupDialog
+from .system_check import SystemCheckScreen
 from .instructions import InstructionsScreen
 from .registration import RegistrationScreen
 from .results import ResultsScreen
@@ -40,6 +46,8 @@ class AppController:
         self.app = app
         config.ensure_runtime_dirs()
         self.db = Database()
+        self._theme_mode = self.db.get_setting("theme") or theme.system_default_mode()
+        theme.apply_theme(self.app, self._theme_mode)
         self.excel = excel.create_controller()
         self.lock = kiosk.create_lock()
         self.lock.on_escape = self._on_escape
@@ -49,26 +57,35 @@ class AppController:
 
         # -- screens --
         self.stack = QStackedWidget()
+        self.system_check = SystemCheckScreen()
         self.registration = RegistrationScreen()
         self.instructions = InstructionsScreen()
         self.review = ReviewBoard()
         self.results = ResultsScreen()
-        for w in (self.registration, self.instructions, self.review, self.results):
+        for w in (self.system_check, self.registration, self.instructions,
+                  self.review, self.results):
             self.stack.addWidget(w)
 
         self.main = QMainWindow()
         self.main.setWindowTitle(config.APP_NAME)
         self.main.setCentralWidget(self.stack)
+        self._build_quit_toolbar()
 
         self.panel = TaskPanel()
         self.panel.session = self.session
+        self.panel.set_theme_label(self._theme_label())
 
         # -- signals --
+        self.system_check.ready.connect(self._on_system_check_passed)
+        self.system_check.quit_requested.connect(self._confirm_quit)
         self.registration.submitted.connect(self._on_registered)
         self.registration.admin_requested.connect(lambda: self._open_admin(False))
+        self.registration.quick_test_requested.connect(self._on_quick_test)
         self.instructions.start_clicked.connect(self._on_start)
         self.panel.submit_project.connect(self._on_submit_project)
         self.panel.logout_requested.connect(lambda: self._open_admin(True))
+        self.panel.quit_requested.connect(self._confirm_quit)
+        self.panel.theme_toggle_requested.connect(self._toggle_theme)
         self.review.reopen_project.connect(self._on_reopen)
         self.review.finish_test.connect(self._on_finish)
         self.results.next_candidate.connect(self._on_next_candidate)
@@ -78,6 +95,39 @@ class AppController:
         self.clock_timer.timeout.connect(self._tick_clock)
         self.watchdog = QTimer()
         self.watchdog.timeout.connect(self._tick_watchdog)
+
+    # -- chrome --------------------------------------------------------------
+
+    def _build_quit_toolbar(self) -> None:
+        """Persistent top bar with a theme toggle and a Quit button, visible
+        on every screen shown in the main window (registration, instructions,
+        review, results)."""
+        toolbar = QToolBar()
+        toolbar.setMovable(False)
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        toolbar.addWidget(spacer)
+        self.theme_btn = QPushButton(self._theme_label())
+        self.theme_btn.setObjectName("ThemeToggle")
+        self.theme_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.theme_btn.clicked.connect(self._toggle_theme)
+        toolbar.addWidget(self.theme_btn)
+        quit_btn = QPushButton("Quitter")
+        quit_btn.setObjectName("Danger")
+        quit_btn.clicked.connect(self._confirm_quit)
+        toolbar.addWidget(quit_btn)
+        self.main.addToolBar(toolbar)
+
+    def _theme_label(self) -> str:
+        return "☀ Mode clair" if self._theme_mode == "dark" else "🌙 Mode sombre"
+
+    def _toggle_theme(self) -> None:
+        self._theme_mode = "light" if self._theme_mode == "dark" else "dark"
+        self.db.set_setting("theme", self._theme_mode)
+        theme.apply_theme(self.app, self._theme_mode)
+        self.theme_btn.setText(self._theme_label())
+        if hasattr(self, "panel"):
+            self.panel.set_theme_label(self._theme_label())
 
     # -- geometry ----------------------------------------------------------
 
@@ -95,6 +145,9 @@ class AppController:
         self.main.showFullScreen()
         self.main.raise_()
         self.main.activateWindow()
+        focus_default = getattr(widget, "focus_default", None)
+        if focus_default is not None:
+            QTimer.singleShot(0, focus_default)
 
     def _show_panel(self) -> None:
         rect = self._screen_rect()
@@ -110,9 +163,12 @@ class AppController:
         )
         self.panel.show()
         self.panel.raise_()
-        # Position Excel above the panel once it has had time to open.
+        # Position Excel above the panel once it has had time to open. Retried
+        # a few times since the very first resize attempt can land before the
+        # workbook's window is fully ready and get silently ignored.
         if self.excel.can_position:
-            QTimer.singleShot(1200, self._position_excel)
+            for delay_ms in (600, 1200, 2200):
+                QTimer.singleShot(delay_ms, self._position_excel)
 
     def _position_excel(self) -> None:
         rect = self._screen_rect()
@@ -133,10 +189,15 @@ class AppController:
             if dlg.exec() != dlg.DialogCode.Accepted:
                 sys.exit(0)
 
+        self._resume_on_ready = resume
+        self._show_fullscreen(self.system_check)
+        self.system_check.start_check()
+
+    def _on_system_check_passed(self) -> None:
         self.excel.start()
         self.lock.engage()
 
-        running = self.db.get_running_session() if resume else None
+        running = self.db.get_running_session() if self._resume_on_ready else None
         if running:
             self._prompt_resume(running.id)
         else:
@@ -183,6 +244,17 @@ class AppController:
         self.session.start()
         self._enter_running()
 
+    def _on_quick_test(self) -> None:
+        """Bypass registration and instructions with dummy data, for quickly
+        exercising the exam flow without filling in any form."""
+        cid = self.db.create_candidate("Test", "Rapide", "AB123456", "0612345678")
+        variant = variants.next_variant(self.db)
+        self.session = ExamSession(self.db)
+        self.panel.session = self.session
+        self.session.create(cid, variant)
+        self.session.start()
+        self._enter_running()
+
     def _enter_running(self) -> None:
         self.session.state = ExamState.RUNNING
         self._open_current_project()
@@ -206,7 +278,8 @@ class AppController:
             self._open_current_project()
             self.panel.load_project()
             if self.excel.can_position:
-                QTimer.singleShot(1000, self._position_excel)
+                for delay_ms in (400, 1000, 2000):
+                    QTimer.singleShot(delay_ms, self._position_excel)
         else:
             self._enter_review()
 
@@ -339,6 +412,20 @@ class AppController:
         elif action == "export":
             QMessageBox.information(parent, "Export",
                                     "Les résultats sont enregistrés après chaque test.")
+
+    def _confirm_quit(self) -> None:
+        parent = self.panel if self.panel.isVisible() else self.main
+        box = QMessageBox(parent)
+        box.setWindowTitle("Quitter l'application")
+        box.setText("Voulez-vous vraiment quitter l'application ?"
+                    + (" La session en cours sera abandonnée." if self.panel.isVisible() else ""))
+        box.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        box.setDefaultButton(QMessageBox.StandardButton.No)
+        if box.exec() == QMessageBox.StandardButton.Yes:
+            self.db.audit("direct_quit", self.session.session_id)
+            self._quit()
 
     def _quit(self) -> None:
         self.clock_timer.stop()

@@ -31,13 +31,16 @@ class _ProjectCard(QWidget):
         lay.addWidget(widgets.label(title, "FieldLabel"))
         lay.addWidget(widgets.label(f"✔ {complete}/{total} achevées", "FieldLabel"))
         lay.addWidget(widgets.label(f"★ {review} à réviser", "FieldLabel"))
-        btn = QPushButton("Reprendre")
-        btn.clicked.connect(lambda: self.clicked.emit(self._no))
-        lay.addWidget(btn)
+        self.resume_btn = QPushButton("Reprendre")
+        self.resume_btn.clicked.connect(lambda: self.clicked.emit(self._no))
+        lay.addWidget(self.resume_btn)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(frame)
+
+
+_CARD_MIN_WIDTH = 220  # px; used to pick how many columns fit the available width
 
 
 class ReviewBoard(QWidget):
@@ -48,6 +51,8 @@ class ReviewBoard(QWidget):
         super().__init__()
         self.setObjectName("Screen")
         self.session: ExamSession | None = None
+        self._cards: list[_ProjectCard] = []
+        self._columns = 4
         self._build()
 
     def _build(self) -> None:
@@ -62,7 +67,9 @@ class ReviewBoard(QWidget):
         finish.setObjectName("Danger")
         finish.setMinimumHeight(48)
         finish.setMinimumWidth(220)
+        finish.setAutoDefault(True)
         finish.clicked.connect(self._confirm_finish)
+        self.finish_btn = finish
         btn_row = QHBoxLayout()
         btn_row.addStretch(1)
         btn_row.addWidget(finish)
@@ -83,13 +90,14 @@ class ReviewBoard(QWidget):
             item = self.grid.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
+        self._cards.clear()
 
         remaining = self.session.remaining_seconds()
         self.subtitle.setText(
             f"Temps restant : {format_mmss(remaining)}  ·  "
             "Cliquez sur un projet pour le reprendre."
         )
-        for i, sp in enumerate(self.session.session_projects):
+        for sp in self.session.session_projects:
             project = self.session.projects[sp.project_no]
             marks = self.session.db.get_task_marks(sp.id)
             complete = sum(1 for m in marks.values() if m["complete"])
@@ -97,7 +105,31 @@ class ReviewBoard(QWidget):
             card = _ProjectCard(sp.project_no, project.title, complete,
                                 review, len(project.tasks))
             card.clicked.connect(self.reopen_project.emit)
-            self.grid.addWidget(card, i // 4, i % 4)
+            self._cards.append(card)
+        self._relayout_cards()
+
+    def _relayout_cards(self) -> None:
+        width = max(self.grid_host.width(), 1)
+        columns = max(1, width // _CARD_MIN_WIDTH)
+        if columns == self._columns and self.grid.count() == len(self._cards):
+            return
+        self._columns = columns
+        while self.grid.count():
+            self.grid.takeAt(0)
+        for i, card in enumerate(self._cards):
+            self.grid.addWidget(card, i // columns, i % columns)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if self._cards:
+            self._relayout_cards()
+
+    def focus_default(self) -> None:
+        if self.grid.count():
+            first_card = self.grid.itemAt(0).widget()
+            first_card.resume_btn.setFocus()
+        else:
+            self.finish_btn.setFocus()
 
     def _confirm_finish(self) -> None:
         from PyQt6.QtWidgets import QMessageBox

@@ -48,6 +48,36 @@ class WinKioskLock(KioskLock):
         self._user32 = ctypes.windll.user32
         self._kernel32 = ctypes.windll.kernel32
         self._ctrl_down = False
+        self._configure_ctypes()
+
+    def _configure_ctypes(self) -> None:
+        # Pointer/handle-sized values (HHOOK, HWND, LPARAM) truncate to 32 bits
+        # under the default c_int argument guessing on 64-bit Windows, so every
+        # declared entry point needs explicit argtypes/restype.
+        self._hookproc_t = ctypes.CFUNCTYPE(
+            ctypes.c_long, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM
+        )
+        u = self._user32
+        u.SetWindowsHookExW.restype = wintypes.HHOOK
+        u.SetWindowsHookExW.argtypes = [
+            ctypes.c_int, self._hookproc_t, wintypes.HINSTANCE, wintypes.DWORD,
+        ]
+        u.CallNextHookEx.restype = ctypes.c_long
+        u.CallNextHookEx.argtypes = [
+            wintypes.HHOOK, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM,
+        ]
+        u.UnhookWindowsHookEx.restype = wintypes.BOOL
+        u.UnhookWindowsHookEx.argtypes = [wintypes.HHOOK]
+        u.GetAsyncKeyState.restype = ctypes.c_short
+        u.GetAsyncKeyState.argtypes = [ctypes.c_int]
+        u.GetForegroundWindow.restype = wintypes.HWND
+        u.GetForegroundWindow.argtypes = []
+        u.SetForegroundWindow.restype = wintypes.BOOL
+        u.SetForegroundWindow.argtypes = [wintypes.HWND]
+        u.PostThreadMessageW.restype = wintypes.BOOL
+        u.PostThreadMessageW.argtypes = [
+            wintypes.DWORD, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM,
+        ]
 
     # -- hook thread -------------------------------------------------------
 
@@ -59,10 +89,7 @@ class WinKioskLock(KioskLock):
         self._thread.start()
 
     def _run(self) -> None:
-        HOOKPROC = ctypes.CFUNCTYPE(
-            ctypes.c_long, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM
-        )
-        self._proc = HOOKPROC(self._callback)  # keep a ref alive
+        self._proc = self._hookproc_t(self._callback)  # keep a ref alive
         self._thread_id = self._kernel32.GetCurrentThreadId()
         self._hook = self._user32.SetWindowsHookExW(
             WH_KEYBOARD_LL, self._proc, None, 0
