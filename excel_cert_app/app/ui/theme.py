@@ -10,11 +10,18 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QGuiApplication
 from PyQt6.QtWidgets import QApplication
 
-# Shared Excel/MOS brand green — kept identical in both palettes so the app
-# reads as the same product regardless of theme.
-_GREEN = "#217346"
-_GREEN_HOVER = "#1c6b3f"
-_GREEN_PRESSED = "#175c36"
+# Windows 11 (Fluent/WinUI) button palette — accent buttons use the default
+# out-of-box Windows blue; standard buttons match the flat, thin-border
+# neutral look of native dialog buttons (e.g. File Explorer's OK/Annuler).
+_ACCENT = "#0067C0"
+_ACCENT_HOVER = "#1975C6"
+_ACCENT_PRESSED = "#005A9E"
+_ACCENT_DISABLED_BG = "#CCCCCC"
+_ACCENT_DISABLED_TEXT = "#8A8A8A"
+
+_DANGER = "#C42B1C"
+_DANGER_HOVER = "#A9241A"
+_DANGER_PRESSED = "#8C1D15"
 
 LIGHT: dict[str, str] = {
     "text": "#1f2933",
@@ -29,27 +36,31 @@ LIGHT: dict[str, str] = {
     "error_bg": "#fdecee", "error_border": "#f5c2c7", "error_text": "#b0121f",
     "input_bg": "#f5f7fa", "input_border": "#cbd2d9", "input_text": "#1f2933",
     "input_hover_border": "#9aa5b1",
-    "input_focus_border": _GREEN, "input_focus_bg": "#ffffff",
-    "btn_bg": _GREEN, "btn_text": "#ffffff",
-    "btn_hover": _GREEN_HOVER, "btn_pressed": _GREEN_PRESSED,
-    "btn_disabled_bg": "#9fb3ab", "btn_disabled_text": "#eef2ef",
-    "secondary_bg": "#e4e7eb", "secondary_text": "#1f2933", "secondary_hover": "#d3d8de",
+    "input_focus_border": _ACCENT, "input_focus_bg": "#ffffff",
+    "btn_bg": _ACCENT, "btn_text": "#ffffff",
+    "btn_hover": _ACCENT_HOVER, "btn_pressed": _ACCENT_PRESSED,
+    "btn_disabled_bg": _ACCENT_DISABLED_BG, "btn_disabled_text": _ACCENT_DISABLED_TEXT,
+    "secondary_bg": "#fbfbfb", "secondary_text": "#1b1b1b", "secondary_border": "#d1d1d1",
+    "secondary_hover": "#f5f5f5", "secondary_pressed": "#ebebeb",
+    "secondary_disabled_bg": "#f5f5f5", "secondary_disabled_text": "#a6a6a6",
+    "secondary_disabled_border": "#e5e5e5",
     "adminlink_bg": "rgba(255, 255, 255, 0.10)", "adminlink_text": "#cfe0f0",
     "adminlink_hover": "rgba(255, 255, 255, 0.20)", "adminlink_pressed": "rgba(255, 255, 255, 0.28)",
     "quicktest_bg": "rgba(255, 193, 7, 0.16)", "quicktest_text": "#ffd479",
     "quicktest_hover": "rgba(255, 193, 7, 0.28)", "quicktest_pressed": "rgba(255, 193, 7, 0.36)",
-    "danger_bg": "#cf1124", "danger_hover": "#ab091e",
-    "ghost_text": "#cf1124", "ghost_border": "#cf1124",
+    "danger_bg": _DANGER, "danger_hover": _DANGER_HOVER, "danger_pressed": _DANGER_PRESSED,
+    "ghost_text": "#1b1b1b", "ghost_border": "#8a8a8a",
+    "ghost_hover_bg": "rgba(0, 0, 0, 0.05)", "ghost_pressed_bg": "rgba(0, 0, 0, 0.08)",
     "themetoggle_bg": "rgba(255, 255, 255, 0.10)", "themetoggle_hover": "rgba(255, 255, 255, 0.20)",
-    "panel_bg": "#0c3c68", "panel_border": _GREEN,
+    "panel_bg": "#0c3c68", "panel_border": _ACCENT,
     "panelinfo": "#ffffff",
     "clock": "#ffffff", "clock_low": "#ffd166",
     "statement_scroll_bg": "#ffffff", "statement_text": "#1f2933",
     "scrollbar_handle": "#b7c1cc", "scrollbar_handle_hover": "#9aa5b1",
     "tab_bg": "#14476f", "tab_text": "#cfe0f0",
     "tab_selected_bg": "#ffffff", "tab_selected_text": "#0c3c68",
-    "projectcard_bg": "#ffffff", "projectcard_hover_border": _GREEN,
-    "verdict_pass": _GREEN, "verdict_fail": "#cf1124",
+    "projectcard_bg": "#ffffff", "projectcard_hover_border": _ACCENT,
+    "verdict_pass": "#217346", "verdict_fail": "#cf1124",
 }
 
 DARK: dict[str, str] = {
@@ -65,26 +76,30 @@ DARK: dict[str, str] = {
     "error_bg": "#3a1620", "error_border": "#7a3040", "error_text": "#ff8fa3",
     "input_bg": "#0e1622", "input_border": "#2a3a4f", "input_text": "#e6edf3",
     "input_hover_border": "#3f556f",
-    "input_focus_border": _GREEN, "input_focus_bg": "#0e1622",
-    "btn_bg": _GREEN, "btn_text": "#ffffff",
-    "btn_hover": _GREEN_HOVER, "btn_pressed": _GREEN_PRESSED,
-    "btn_disabled_bg": "#2c3b3a", "btn_disabled_text": "#7c9089",
-    "secondary_bg": "#25344a", "secondary_text": "#e6edf3", "secondary_hover": "#31465f",
+    "input_focus_border": _ACCENT, "input_focus_bg": "#0e1622",
+    "btn_bg": _ACCENT, "btn_text": "#ffffff",
+    "btn_hover": _ACCENT_HOVER, "btn_pressed": _ACCENT_PRESSED,
+    "btn_disabled_bg": "#3a3a3a", "btn_disabled_text": "#6b6b6b",
+    "secondary_bg": "#2b2b2b", "secondary_text": "#e6edf3", "secondary_border": "#3d3d3d",
+    "secondary_hover": "#333333", "secondary_pressed": "#252525",
+    "secondary_disabled_bg": "#2b2b2b", "secondary_disabled_text": "#6b6b6b",
+    "secondary_disabled_border": "#333333",
     "adminlink_bg": "rgba(255, 255, 255, 0.06)", "adminlink_text": "#a9bdd4",
     "adminlink_hover": "rgba(255, 255, 255, 0.14)", "adminlink_pressed": "rgba(255, 255, 255, 0.20)",
     "quicktest_bg": "rgba(255, 193, 7, 0.12)", "quicktest_text": "#ffd479",
     "quicktest_hover": "rgba(255, 193, 7, 0.22)", "quicktest_pressed": "rgba(255, 193, 7, 0.30)",
-    "danger_bg": "#c22235", "danger_hover": "#a01829",
-    "ghost_text": "#ff8fa3", "ghost_border": "#ff8fa3",
+    "danger_bg": _DANGER, "danger_hover": "#d5372a", "danger_pressed": "#9e2416",
+    "ghost_text": "#e6edf3", "ghost_border": "#5a5a5a",
+    "ghost_hover_bg": "rgba(255, 255, 255, 0.06)", "ghost_pressed_bg": "rgba(255, 255, 255, 0.10)",
     "themetoggle_bg": "rgba(255, 255, 255, 0.06)", "themetoggle_hover": "rgba(255, 255, 255, 0.14)",
-    "panel_bg": "#0e1826", "panel_border": _GREEN,
+    "panel_bg": "#0e1826", "panel_border": _ACCENT,
     "panelinfo": "#e6edf3",
     "clock": "#ffffff", "clock_low": "#ffd166",
     "statement_scroll_bg": "#0e1622", "statement_text": "#e6edf3",
     "scrollbar_handle": "#33455c", "scrollbar_handle_hover": "#445973",
     "tab_bg": "#0e1826", "tab_text": "#93a3b8",
     "tab_selected_bg": "#161f2e", "tab_selected_text": "#e6edf3",
-    "projectcard_bg": "#161f2e", "projectcard_hover_border": _GREEN,
+    "projectcard_bg": "#161f2e", "projectcard_hover_border": _ACCENT,
     "verdict_pass": "#3ddc84", "verdict_fail": "#ff5468",
 }
 
@@ -241,8 +256,8 @@ QPushButton {{
     background: {btn_bg};
     color: {btn_text};
     border: none;
-    border-radius: 8px;
-    padding: 11px 20px;
+    border-radius: 4px;
+    padding: 10px 20px;
     font-size: 14px;
     font-weight: 600;
 }}
@@ -259,15 +274,22 @@ QPushButton#Primary {{
 QPushButton#Secondary {{
     background: {secondary_bg};
     color: {secondary_text};
+    border: 1px solid {secondary_border};
 }}
-QPushButton#Secondary:hover {{ background: {secondary_hover}; }}
+QPushButton#Secondary:hover    {{ background: {secondary_hover}; }}
+QPushButton#Secondary:pressed  {{ background: {secondary_pressed}; }}
+QPushButton#Secondary:disabled {{
+    background: {secondary_disabled_bg};
+    color: {secondary_disabled_text};
+    border: 1px solid {secondary_disabled_border};
+}}
 
 QPushButton#AdminLink {{
     background: {adminlink_bg};
     color: {adminlink_text};
     font-weight: 600;
     padding: 9px 18px;
-    border-radius: 8px;
+    border-radius: 4px;
 }}
 QPushButton#AdminLink:hover   {{ background: {adminlink_hover}; }}
 QPushButton#AdminLink:pressed {{ background: {adminlink_pressed}; }}
@@ -277,7 +299,7 @@ QPushButton#QuickTestLink {{
     color: {quicktest_text};
     font-weight: 600;
     padding: 9px 18px;
-    border-radius: 8px;
+    border-radius: 4px;
 }}
 QPushButton#QuickTestLink:hover   {{ background: {quicktest_hover}; }}
 QPushButton#QuickTestLink:pressed {{ background: {quicktest_pressed}; }}
@@ -285,20 +307,24 @@ QPushButton#QuickTestLink:pressed {{ background: {quicktest_pressed}; }}
 QPushButton#Danger {{
     background: {danger_bg};
 }}
-QPushButton#Danger:hover {{ background: {danger_hover}; }}
+QPushButton#Danger:hover   {{ background: {danger_hover}; }}
+QPushButton#Danger:pressed {{ background: {danger_pressed}; }}
 
 QPushButton#Ghost {{
     background: transparent;
     color: {ghost_text};
     border: 1px solid {ghost_border};
 }}
+QPushButton#Ghost:hover    {{ background: {ghost_hover_bg}; }}
+QPushButton#Ghost:pressed  {{ background: {ghost_pressed_bg}; }}
+QPushButton#Ghost:disabled {{ color: {secondary_disabled_text}; border: 1px solid {secondary_disabled_border}; }}
 
 QPushButton#ThemeToggle {{
     background: {themetoggle_bg};
     color: {text};
     font-weight: 600;
     padding: 8px 14px;
-    border-radius: 8px;
+    border-radius: 4px;
 }}
 QPushButton#ThemeToggle:hover {{ background: {themetoggle_hover}; }}
 

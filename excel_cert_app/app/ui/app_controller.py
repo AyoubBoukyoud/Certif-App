@@ -8,6 +8,7 @@ task panel is shown with Excel filling the space above it.
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QGuiApplication
@@ -231,8 +232,8 @@ class AppController:
 
     # -- flow --------------------------------------------------------------
 
-    def _on_registered(self, first, last, cin, phone) -> None:
-        cid = self.db.create_candidate(first, last, cin, phone)
+    def _on_registered(self, first, last, cin, birth_date, institution) -> None:
+        cid = self.db.create_candidate(first, last, cin, birth_date, institution)
         variant = variants.next_variant(self.db)
         self.session = ExamSession(self.db)
         self.panel.session = self.session
@@ -247,7 +248,10 @@ class AppController:
     def _on_quick_test(self) -> None:
         """Bypass registration and instructions with dummy data, for quickly
         exercising the exam flow without filling in any form."""
-        cid = self.db.create_candidate("Test", "Rapide", "AB123456", "0612345678")
+        cid = self.db.create_candidate(
+            "Test", "Rapide", "AB123456", "01/01/2000",
+            "INSTITUT SPECIALISE DE TECHNOLOGIE APPLIQUEE TEMARA",
+        )
         variant = variants.next_variant(self.db)
         self.session = ExamSession(self.db)
         self.panel.session = self.session
@@ -266,7 +270,24 @@ class AppController:
 
     def _open_current_project(self) -> None:
         sp = self.session.current_session_project()
-        self.excel.open_project(sp.workfile_path)
+        path = Path(sp.workfile_path)
+        if not path.exists():
+            # The work file can go missing (moved/deleted, or a resumed
+            # session from a previous, since-archived run) — regenerate a
+            # fresh copy from the pristine project template rather than
+            # letting Workbooks.Open blow up.
+            path = workdir.prepare_project(self.session.session_id, sp.project_no)
+        try:
+            self.excel.open_project(path)
+        except Exception as exc:
+            self.db.audit("excel_open_error", self.session.session_id, str(exc))
+            QMessageBox.critical(
+                self.main, "Erreur Excel",
+                f"Impossible d'ouvrir le fichier du projet {sp.project_no} dans "
+                f"Excel :\n\n{exc}\n\nVérifiez que Microsoft Excel fonctionne "
+                "correctement, puis contactez l'administrateur si le problème "
+                "persiste.",
+            )
 
     def _on_submit_project(self) -> None:
         try:
@@ -319,7 +340,8 @@ class AppController:
                 config.DATA_DIR / results_path if not str(results_path).startswith("/")
                 else results_path,
                 first_name=cand.first_name, last_name=cand.last_name,
-                cin=cand.cin, phone=cand.phone, variant=self.session.variant,
+                cin=cand.cin, birth_date=cand.birth_date,
+                institution=cand.institution, variant=self.session.variant,
                 duration_s=self.session.elapsed_seconds(),
                 score_pct=result.score_pct, passed=result.passed,
             )

@@ -80,24 +80,33 @@ class Database:
                 self.conn.execute("PRAGMA table_info(candidates)").fetchall()}
         if "birth_date" in cols and "institution" in cols and "phone" not in cols:
             return  # already on the current schema
-        self.conn.executescript(
-            """
-            CREATE TABLE candidates_new (
-                id          INTEGER PRIMARY KEY,
-                first_name  TEXT NOT NULL,
-                last_name   TEXT NOT NULL,
-                cin         TEXT NOT NULL,
-                birth_date  TEXT,
-                institution TEXT,
-                created_at  TEXT NOT NULL
-            );
-            INSERT INTO candidates_new (id, first_name, last_name, cin, created_at)
-                SELECT id, first_name, last_name, cin, created_at FROM candidates;
-            DROP TABLE candidates;
-            ALTER TABLE candidates_new RENAME TO candidates;
-            """
-        )
-        self.conn.commit()
+        # sessions.candidate_id references candidates(id) with FK enforcement
+        # on, so dropping candidates while any session rows exist would
+        # violate that constraint — foreign_keys is a no-op mid-transaction,
+        # so it must be toggled outside the executescript() below.
+        self.conn.execute("PRAGMA foreign_keys = OFF")
+        try:
+            self.conn.executescript(
+                """
+                DROP TABLE IF EXISTS candidates_new;
+                CREATE TABLE candidates_new (
+                    id          INTEGER PRIMARY KEY,
+                    first_name  TEXT NOT NULL,
+                    last_name   TEXT NOT NULL,
+                    cin         TEXT NOT NULL,
+                    birth_date  TEXT,
+                    institution TEXT,
+                    created_at  TEXT NOT NULL
+                );
+                INSERT INTO candidates_new (id, first_name, last_name, cin, created_at)
+                    SELECT id, first_name, last_name, cin, created_at FROM candidates;
+                DROP TABLE candidates;
+                ALTER TABLE candidates_new RENAME TO candidates;
+                """
+            )
+            self.conn.commit()
+        finally:
+            self.conn.execute("PRAGMA foreign_keys = ON")
 
     def close(self) -> None:
         self.conn.close()

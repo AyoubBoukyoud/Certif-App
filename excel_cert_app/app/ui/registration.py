@@ -41,7 +41,7 @@ def _field(label_text: str, editor: QLineEdit) -> QWidget:
 
 
 class RegistrationScreen(QWidget):
-    submitted = pyqtSignal(str, str, str, str)  # first, last, cin, phone
+    submitted = pyqtSignal(str, str, str, str, str)  # first, last, cin, birth_date, institution
     admin_requested = pyqtSignal()
     quick_test_requested = pyqtSignal()
 
@@ -84,11 +84,23 @@ class RegistrationScreen(QWidget):
         self.first = QLineEdit(placeholderText="Prénom")
         self.last = QLineEdit(placeholderText="Nom")
         self.cin = QLineEdit(placeholderText="AB123456")
-        self.phone = QLineEdit(placeholderText="0612345678")
-        for e in (self.first, self.last, self.cin, self.phone):
+        for e in (self.first, self.last, self.cin):
             e.setMinimumHeight(44)
             e.setClearButtonEnabled(True)
             e.returnPressed.connect(self._on_submit)
+
+        self.birth_date = QDateEdit()
+        self.birth_date.setDisplayFormat("dd/MM/yyyy")
+        self.birth_date.setCalendarPopup(True)
+        self.birth_date.setMinimumHeight(44)
+        today = QDate.currentDate()
+        self.birth_date.setDateRange(today.addYears(-80), today.addYears(-10))
+        self.birth_date.setDate(today.addYears(-20))
+
+        self.institution = QComboBox()
+        self.institution.setMinimumHeight(44)
+        self.institution.addItem("Sélectionnez votre établissement")
+        self.institution.addItems(INSTITUTIONS)
 
         name_row = QHBoxLayout()
         name_row.setSpacing(16)
@@ -98,7 +110,9 @@ class RegistrationScreen(QWidget):
         inner.addSpacing(16)
         inner.addWidget(_field("Numéro de CIN", self.cin))
         inner.addSpacing(16)
-        inner.addWidget(_field("Numéro de téléphone", self.phone))
+        inner.addWidget(_field("Date de naissance", self.birth_date))
+        inner.addSpacing(16)
+        inner.addWidget(_field("Établissement", self.institution))
 
         self.error = widgets.label("", "ErrorBanner")
         self.error.setVisible(False)
@@ -138,8 +152,9 @@ class RegistrationScreen(QWidget):
         # ---- Keyboard navigation: Tab walks the form top to bottom ----
         self.setTabOrder(self.first, self.last)
         self.setTabOrder(self.last, self.cin)
-        self.setTabOrder(self.cin, self.phone)
-        self.setTabOrder(self.phone, self.start_btn)
+        self.setTabOrder(self.cin, self.birth_date)
+        self.setTabOrder(self.birth_date, self.institution)
+        self.setTabOrder(self.institution, self.start_btn)
         self.setTabOrder(self.start_btn, quick_test)
         self.setTabOrder(quick_test, admin)
 
@@ -168,8 +183,10 @@ class RegistrationScreen(QWidget):
         root.addWidget(scroll)
 
     def reset(self) -> None:
-        for e in (self.first, self.last, self.cin, self.phone):
+        for e in (self.first, self.last, self.cin):
             e.clear()
+        self.birth_date.setDate(QDate.currentDate().addYears(-20))
+        self.institution.setCurrentIndex(0)
         self.error.clear()
         self.error.setVisible(False)
         self._warned = False
@@ -185,17 +202,19 @@ class RegistrationScreen(QWidget):
         first = self.first.text().strip()
         last = self.last.text().strip()
         cin = self.cin.text().strip().upper()
-        phone = self.phone.text().strip()
+        birth_date = self.birth_date.date().toString("dd/MM/yyyy")
+        institution = self.institution.currentText().strip()
         self.cin.setText(cin)
 
-        if not (first and last and cin and phone):
+        if not (first and last and cin):
             self._show_error("Tous les champs sont obligatoires.")
+            return
+        if self.institution.currentIndex() == 0:
+            self._show_error("Veuillez sélectionner un établissement.")
             return
         warnings = []
         if not CIN_RE.match(cin):
             warnings.append("le format du CIN semble incorrect")
-        if not PHONE_RE.match(phone):
-            warnings.append("le format du téléphone semble incorrect")
         # Warnings are non-blocking: confirm once, then allow.
         if warnings and not self._warned:
             self._show_error("Attention : " + ", ".join(warnings)
@@ -204,4 +223,4 @@ class RegistrationScreen(QWidget):
             return
         self._warned = False
         self.error.setVisible(False)
-        self.submitted.emit(first, last, cin, phone)
+        self.submitted.emit(first, last, cin, birth_date, institution)
