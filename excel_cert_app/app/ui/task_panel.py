@@ -72,8 +72,10 @@ class TaskPanel(QWidget):
         logout = QPushButton("Déconnexion")
         logout.setObjectName("Secondary")
         logout.clicked.connect(self.logout_requested.emit)
-        quit_btn = QPushButton("Quitter")
-        quit_btn.setObjectName("Danger")
+        quit_btn = QPushButton("✕")
+        quit_btn.setObjectName("QuitIcon")
+        quit_btn.setToolTip("Quitter")
+        quit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         quit_btn.clicked.connect(self.quit_requested.emit)
 
         actions = QHBoxLayout()
@@ -126,12 +128,13 @@ class TaskPanel(QWidget):
         self.next_btn.clicked.connect(self._next_task)
 
         bottom = QHBoxLayout()
-        bottom.addWidget(self.prev_btn)
+        bottom.setSpacing(8)
         bottom.addStretch(1)
+        bottom.addWidget(self.prev_btn)
         bottom.addWidget(self.review_btn)
         bottom.addWidget(self.complete_btn)
-        bottom.addStretch(1)
         bottom.addWidget(self.next_btn)
+        bottom.addStretch(1)
         root.addLayout(bottom)
 
     def set_theme_label(self, label: str) -> None:

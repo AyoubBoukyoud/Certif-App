@@ -113,8 +113,10 @@ class AppController:
         self.theme_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.theme_btn.clicked.connect(self._toggle_theme)
         toolbar.addWidget(self.theme_btn)
-        quit_btn = QPushButton("Quitter")
-        quit_btn.setObjectName("Danger")
+        quit_btn = QPushButton("✕")
+        quit_btn.setObjectName("QuitIcon")
+        quit_btn.setToolTip("Quitter")
+        quit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         quit_btn.clicked.connect(self._confirm_quit)
         toolbar.addWidget(quit_btn)
         self.main.addToolBar(toolbar)
@@ -136,9 +138,11 @@ class AppController:
         return QGuiApplication.primaryScreen().geometry()
 
     def _panel_height(self) -> int:
-        """Bottom panel = 1/4 of the screen (Excel gets the top 3/4)."""
+        """Bottom panel = 1/4 of the screen (Excel gets the top 3/4), minus a
+        small buffer handed back to Excel so its sheet-tab strip stays clear
+        of the panel even when Excel adds a notification bar of its own."""
         h = int(self._screen_rect().height() * config.PANEL_HEIGHT_FRACTION)
-        return max(config.PANEL_MIN_HEIGHT, h)
+        return max(config.PANEL_MIN_HEIGHT, h) - config.EXCEL_HEIGHT_BUFFER_PX
 
     def _show_fullscreen(self, widget) -> None:
         self.panel.hide()

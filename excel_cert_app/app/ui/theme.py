@@ -256,9 +256,9 @@ QPushButton {{
     background: {btn_bg};
     color: {btn_text};
     border: none;
-    border-radius: 4px;
-    padding: 10px 20px;
-    font-size: 14px;
+    border-radius: 3px;
+    padding: 7px 14px;
+    font-size: 10px;
     font-weight: 600;
 }}
 QPushButton:hover   {{ background: {btn_hover}; }}
@@ -266,7 +266,7 @@ QPushButton:pressed {{ background: {btn_pressed}; }}
 QPushButton:disabled {{ background: {btn_disabled_bg}; color: {btn_disabled_text}; }}
 
 QPushButton#Primary {{
-    font-size: 16px;
+    font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.3px;
 }}
@@ -288,8 +288,8 @@ QPushButton#AdminLink {{
     background: {adminlink_bg};
     color: {adminlink_text};
     font-weight: 600;
-    padding: 9px 18px;
-    border-radius: 4px;
+    padding: 6px 13px;
+    border-radius: 3px;
 }}
 QPushButton#AdminLink:hover   {{ background: {adminlink_hover}; }}
 QPushButton#AdminLink:pressed {{ background: {adminlink_pressed}; }}
@@ -298,8 +298,8 @@ QPushButton#QuickTestLink {{
     background: {quicktest_bg};
     color: {quicktest_text};
     font-weight: 600;
-    padding: 9px 18px;
-    border-radius: 4px;
+    padding: 6px 13px;
+    border-radius: 3px;
 }}
 QPushButton#QuickTestLink:hover   {{ background: {quicktest_hover}; }}
 QPushButton#QuickTestLink:pressed {{ background: {quicktest_pressed}; }}
@@ -319,12 +319,23 @@ QPushButton#Ghost:hover    {{ background: {ghost_hover_bg}; }}
 QPushButton#Ghost:pressed  {{ background: {ghost_pressed_bg}; }}
 QPushButton#Ghost:disabled {{ color: {secondary_disabled_text}; border: 1px solid {secondary_disabled_border}; }}
 
+QPushButton#QuitIcon {{
+    background: transparent;
+    color: {danger_bg};
+    font-size: 14px;
+    font-weight: 800;
+    padding: 4px 10px;
+    border-radius: 3px;
+}}
+QPushButton#QuitIcon:hover   {{ background: {danger_bg}; color: #ffffff; }}
+QPushButton#QuitIcon:pressed {{ background: {danger_pressed}; color: #ffffff; }}
+
 QPushButton#ThemeToggle {{
     background: {themetoggle_bg};
     color: {text};
     font-weight: 600;
-    padding: 8px 14px;
-    border-radius: 4px;
+    padding: 6px 10px;
+    border-radius: 3px;
 }}
 QPushButton#ThemeToggle:hover {{ background: {themetoggle_hover}; }}
 

@@ -72,6 +72,9 @@ class WinExcelController(ExcelController):
         return handles[0] if handles else None
 
     def position_window(self, x: int, y: int, width: int, height: int) -> None:
+        import ctypes
+        from ctypes import wintypes
+
         import win32con
         import win32gui
 
@@ -81,7 +84,37 @@ class WinExcelController(ExcelController):
         # A window left in a maximized/minimized state ignores an explicit
         # resize request, so force it back to normal before moving it.
         win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-        win32gui.MoveWindow(hwnd, x, y, width, height, True)
+
+        # DWM wraps top-level windows in an invisible resize border (drop-
+        # shadow hit-testing padding) that GetWindowRect includes but that
+        # isn't actually visible on screen. A plain MoveWindow(x, y, w, h)
+        # therefore leaves the *visible* Excel frame inset from (x, y, w, h)
+        # by that padding, i.e. a gap around the window. Measure the padding
+        # via DWMWA_EXTENDED_FRAME_BOUNDS (the true visible bounds) against
+        # GetWindowRect and inflate the target rect to compensate so the
+        # visible frame lands exactly on the requested rect.
+        pad_left = pad_top = pad_right = pad_bottom = 0
+        try:
+            win_rect = win32gui.GetWindowRect(hwnd)
+            ext = wintypes.RECT()
+            DWMWA_EXTENDED_FRAME_BOUNDS = 9
+            ctypes.windll.dwmapi.DwmGetWindowAttribute(
+                hwnd, DWMWA_EXTENDED_FRAME_BOUNDS,
+                ctypes.byref(ext), ctypes.sizeof(ext),
+            )
+            pad_left = ext.left - win_rect[0]
+            pad_top = ext.top - win_rect[1]
+            pad_right = win_rect[2] - ext.right
+            pad_bottom = win_rect[3] - ext.bottom
+        except Exception:
+            pass
+
+        win32gui.MoveWindow(
+            hwnd,
+            x - pad_left, y - pad_top,
+            width + pad_left + pad_right, height + pad_top + pad_bottom,
+            True,
+        )
         win32gui.SetForegroundWindow(hwnd)
 
     # -- save / close ------------------------------------------------------

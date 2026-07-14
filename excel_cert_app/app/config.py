@@ -59,6 +59,10 @@ ORG_NAME: str = "MOS"
 PANEL_HEIGHT_FRACTION: float = 0.25
 PANEL_MIN_HEIGHT: int = 260                # px floor for very short screens
 PANEL_HEIGHT: int = 260                    # fallback when no screen size is known
+# Extra vertical room handed to Excel (taken out of the panel's share) so an
+# intermittent Excel notification bar (e.g. the "product not activated"
+# banner) never pushes the sheet-tab strip below the visible window edge.
+EXCEL_HEIGHT_BUFFER_PX: int = 50
 LOW_TIME_WARNING_S: int = 300              # clock turns red under 5 minutes
 
 
