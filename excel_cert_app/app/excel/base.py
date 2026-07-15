@@ -27,6 +27,11 @@ class ExcelController(abc.ABC):
         """Place the application window in the given screen rectangle."""
 
     @abc.abstractmethod
+    def set_chrome_visible(self, visible: bool) -> None:
+        """Show/hide the application's own chrome (ribbon, formula bar,
+        title bar, status bar) — used for a true fullscreen look."""
+
+    @abc.abstractmethod
     def force_save(self) -> Path | None:
         """Save the active workbook in place; return its path."""
 
@@ -49,3 +54,4 @@ class ExcelController(abc.ABC):
     # Optional capability flags used by the watchdog/kiosk layer.
     can_position: bool = False
     can_guard_close: bool = False
+    can_toggle_chrome: bool = False

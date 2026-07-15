@@ -339,6 +339,19 @@ QPushButton#ThemeToggle {{
 }}
 QPushButton#ThemeToggle:hover {{ background: {themetoggle_hover}; }}
 
+QPushButton#PanelHandle {{
+    background: {btn_bg};
+    color: {btn_text};
+    font-size: 11px;
+    font-weight: 700;
+    padding: 6px 16px;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    border-bottom-left-radius: 0px;
+    border-bottom-right-radius: 0px;
+}}
+QPushButton#PanelHandle:hover {{ background: {btn_hover}; }}
+
 /* ---- System check screen ---- */
 QLabel#StatusOk {{ color: {verdict_pass}; font-weight: 700; }}
 QLabel#StatusBad {{ color: {verdict_fail}; font-weight: 700; }}

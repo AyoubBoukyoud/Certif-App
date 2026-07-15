@@ -24,3 +24,13 @@ def create_controller(auto_open: bool = True) -> ExcelController:
     from .stub_controller import StubExcelController
 
     return StubExcelController(auto_open=auto_open)
+
+
+def kill_all_excel_processes() -> None:
+    """Force-close every EXCEL.EXE process on the machine (Windows only;
+    no-op elsewhere), so a fresh Excel launch never inherits a stray
+    process left over from a previous crashed or aborted run."""
+    if sys.platform == "win32":
+        from .win_controller import kill_all_excel_processes as _kill
+
+        _kill()

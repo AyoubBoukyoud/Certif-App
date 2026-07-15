@@ -29,6 +29,8 @@ class TaskPanel(QWidget):
     logout_requested = pyqtSignal()
     quit_requested = pyqtSignal()
     theme_toggle_requested = pyqtSignal()
+    refresh_requested = pyqtSignal()
+    hide_requested = pyqtSignal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -67,6 +69,19 @@ class TaskPanel(QWidget):
         self.theme_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.theme_btn.setToolTip("Changer de thème")
         self.theme_btn.clicked.connect(self.theme_toggle_requested.emit)
+        self.refresh_btn = QPushButton("🔄")
+        self.refresh_btn.setObjectName("ThemeToggle")
+        self.refresh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.refresh_btn.setToolTip(
+            "Redémarrer Excel (ferme tous les processus Excel et rouvre le "
+            "fichier du projet en cours)"
+        )
+        self.refresh_btn.clicked.connect(self.refresh_requested.emit)
+        self.hide_btn = QPushButton("▾ Masquer")
+        self.hide_btn.setObjectName("Secondary")
+        self.hide_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.hide_btn.setToolTip("Masquer le panneau (Excel occupe tout l'écran)")
+        self.hide_btn.clicked.connect(self.hide_requested.emit)
         submit = QPushButton("Soumettre le projet")
         submit.clicked.connect(self._confirm_submit)
         logout = QPushButton("Déconnexion")
@@ -81,6 +96,8 @@ class TaskPanel(QWidget):
         actions = QHBoxLayout()
         actions.setSpacing(8)
         actions.addWidget(self.theme_btn)
+        actions.addWidget(self.refresh_btn)
+        actions.addWidget(self.hide_btn)
         actions.addStretch(1)
         actions.addWidget(quit_btn)
         actions.addWidget(logout)

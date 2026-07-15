@@ -51,6 +51,9 @@ class StubExcelController(ExcelController):
     def position_window(self, x: int, y: int, width: int, height: int) -> None:
         return
 
+    def set_chrome_visible(self, visible: bool) -> None:
+        return
+
     def force_save(self) -> Path | None:
         # The real editor saves in place; here we simply report the path.
         return self._current

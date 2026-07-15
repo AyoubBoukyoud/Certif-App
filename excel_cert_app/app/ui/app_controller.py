@@ -2,15 +2,16 @@
 
 Owns the windows, the exam session, the Excel controller and the kiosk lock,
 and drives the transitions between screens. Fullscreen screens live in a
-stacked main window; during a project the main window hides and the bottom
-task panel is shown with Excel filling the space above it.
+stacked main window; during a project the main window hides and Excel fills
+the whole screen, with the task panel available on demand via a small
+floating handle.
 """
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt, QRect, QTimer
 from PyQt6.QtGui import QGuiApplication
 from PyQt6.QtWidgets import (
     QApplication,
@@ -75,6 +76,8 @@ class AppController:
         self.panel = TaskPanel()
         self.panel.session = self.session
         self.panel.set_theme_label(self._theme_label())
+        self._build_panel_handle()
+        self._build_backdrop()
 
         # -- signals --
         self.system_check.ready.connect(self._on_system_check_passed)
@@ -87,6 +90,8 @@ class AppController:
         self.panel.logout_requested.connect(lambda: self._open_admin(True))
         self.panel.quit_requested.connect(self._confirm_quit)
         self.panel.theme_toggle_requested.connect(self._toggle_theme)
+        self.panel.hide_requested.connect(self._hide_panel)
+        self.panel.refresh_requested.connect(self._on_refresh_excel)
         self.review.reopen_project.connect(self._on_reopen)
         self.review.finish_test.connect(self._on_finish)
         self.results.next_candidate.connect(self._on_next_candidate)
@@ -121,6 +126,25 @@ class AppController:
         toolbar.addWidget(quit_btn)
         self.main.addToolBar(toolbar)
 
+    def _build_panel_handle(self) -> None:
+        """Small floating handle that stays on screen when the task panel is
+        hidden, so Excel can take the full screen without losing the way
+        back to the panel."""
+        self.panel_handle = QPushButton("▲ Afficher le panneau")
+        self.panel_handle.setObjectName("PanelHandle")
+        self.panel_handle.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.panel_handle.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
+        )
+        self.panel_handle.clicked.connect(self._restore_panel)
+
+    def _build_backdrop(self) -> None:
+        """Full-screen black window shown behind Excel while the task panel
+        is hidden, so no desktop/taskbar shows through around the edges."""
+        self.backdrop = QWidget()
+        self.backdrop.setStyleSheet("background-color: #000000;")
+        self.backdrop.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+
     def _theme_label(self) -> str:
         return "☀ Mode clair" if self._theme_mode == "dark" else "🌙 Mode sombre"
 
@@ -137,6 +161,20 @@ class AppController:
     def _screen_rect(self):
         return QGuiApplication.primaryScreen().geometry()
 
+    def _physical_screen_rect(self) -> QRect:
+        """Win32 window-placement calls (used to size/move the real Excel
+        window) always work in physical pixels, while Qt's own geometry is
+        reported in DPI-scaled logical pixels (e.g. 1536x864 logical for a
+        1920x1080 monitor at 125% scaling). Convert explicitly so Excel
+        actually fills the monitor instead of stopping at the logical size."""
+        screen = QGuiApplication.primaryScreen()
+        rect = screen.geometry()
+        dpr = screen.devicePixelRatio()
+        return QRect(
+            int(rect.x() * dpr), int(rect.y() * dpr),
+            int(rect.width() * dpr), int(rect.height() * dpr),
+        )
+
     def _panel_height(self) -> int:
         """Bottom panel = 1/4 of the screen (Excel gets the top 3/4), minus a
         small buffer handed back to Excel so its sheet-tab strip stays clear
@@ -146,6 +184,10 @@ class AppController:
 
     def _show_fullscreen(self, widget) -> None:
         self.panel.hide()
+        self.panel_handle.hide()
+        self.backdrop.hide()
+        if self.excel.can_toggle_chrome:
+            self.excel.set_chrome_visible(True)
         self.stack.setCurrentWidget(widget)
         self.main.showFullScreen()
         self.main.raise_()
@@ -155,6 +197,10 @@ class AppController:
             QTimer.singleShot(0, focus_default)
 
     def _show_panel(self) -> None:
+        self.panel_handle.hide()
+        self.backdrop.hide()
+        if self.excel.can_toggle_chrome:
+            self.excel.set_chrome_visible(True)
         rect = self._screen_rect()
         panel_h = self._panel_height()
         self.main.hide()
@@ -176,19 +222,58 @@ class AppController:
                 QTimer.singleShot(delay_ms, self._position_excel)
 
     def _position_excel(self) -> None:
-        rect = self._screen_rect()
-        panel_h = self._panel_height()
+        rect = self._physical_screen_rect()
+        width = int(rect.width() * config.EXCEL_WIDTH_FRACTION)
+        height = int(rect.height() * config.EXCEL_HEIGHT_FRACTION)
         try:
-            self.excel.position_window(
-                rect.x(), rect.y(), rect.width(),
-                rect.height() - panel_h,
-            )
+            self.excel.position_window(rect.x(), rect.y(), width, height)
         except Exception:
             pass
+
+    def _position_excel_full(self) -> None:
+        rect = self._physical_screen_rect()
+        try:
+            self.excel.position_window(rect.x(), rect.y(), rect.width(), rect.height())
+        except Exception:
+            pass
+
+    def _hide_panel(self) -> None:
+        """Hide the task panel entirely so Excel can take the full screen;
+        a small floating handle stays on screen to bring the panel back."""
+        self.main.hide()
+        self.panel.hide()
+        rect = self._screen_rect()
+        self.backdrop.setGeometry(rect.x(), rect.y(), rect.width(), rect.height())
+        self.backdrop.show()
+        self.backdrop.lower()
+        if self.excel.can_toggle_chrome:
+            self.excel.set_chrome_visible(False)
+        handle_w = max(self.panel_handle.sizeHint().width() + 24, 160)
+        handle_h = 30
+        self.panel_handle.setFixedSize(handle_w, handle_h)
+        self.panel_handle.move(
+            rect.x() + (rect.width() - handle_w) // 2,
+            rect.y() + rect.height() - handle_h,
+        )
+        self.panel_handle.show()
+        self.panel_handle.raise_()
+        if self.excel.can_position:
+            for delay_ms in (0, 400, 900):
+                QTimer.singleShot(delay_ms, self._position_excel_full)
+
+    def _restore_panel(self) -> None:
+        self._show_panel()
 
     # -- startup -----------------------------------------------------------
 
     def start(self, resume: bool = True) -> None:
+        # A previous run left crashed/orphaned or an admin's own EXCEL.EXE
+        # lingering never affects the exam (DispatchEx always opens an
+        # isolated instance), but it can leave a stray invisible window that
+        # confuses window-handle scans (kiosk lock, positioning). Clear the
+        # slate on every launch.
+        excel.kill_all_excel_processes()
+
         if not self.db.is_admin_code_set():
             dlg = AdminSetupDialog(self.db)
             if dlg.exec() != dlg.DialogCode.Accepted:
@@ -293,6 +378,35 @@ class AppController:
                 "persiste.",
             )
 
+    def _on_refresh_excel(self) -> None:
+        """Manual recovery: kill every Excel process and relaunch the
+        current project's work file from scratch (e.g. Excel froze or
+        misbehaved). Mirrors the watchdog's crash-recovery path, without
+        attempting to save the (possibly unresponsive) workbook first."""
+        box = QMessageBox(self.panel)
+        box.setWindowTitle("Redémarrer Excel")
+        box.setText("Fermer et relancer Excel ? Les modifications non "
+                    "enregistrées depuis la dernière sauvegarde automatique "
+                    "seront perdues.")
+        box.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        box.setDefaultButton(QMessageBox.StandardButton.No)
+        if box.exec() != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            self.excel.shutdown()
+        except Exception:
+            pass
+        excel.kill_all_excel_processes()
+        self.excel.start()
+        self._open_current_project()
+        if self.panel.isVisible():
+            self._show_panel()
+        else:
+            self._hide_panel()
+
     def _on_submit_project(self) -> None:
         try:
             self.excel.force_save()
@@ -302,9 +416,7 @@ class AppController:
         if self.session.advance_after_submit():
             self._open_current_project()
             self.panel.load_project()
-            if self.excel.can_position:
-                for delay_ms in (400, 1000, 2000):
-                    QTimer.singleShot(delay_ms, self._position_excel)
+            self._show_panel()
         else:
             self._enter_review()
 
@@ -406,7 +518,7 @@ class AppController:
                 hwnds.extend(self.excel.excel_window_handles())
             except Exception:
                 pass
-        for w in (self.panel, self.main):
+        for w in (self.panel, self.main, self.panel_handle, self.backdrop):
             try:
                 hwnds.append(int(w.winId()))
             except Exception:

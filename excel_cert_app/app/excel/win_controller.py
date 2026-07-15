@@ -15,9 +15,24 @@ from .base import ExcelController
 _XLMAIN = "XLMAIN"
 
 
+def kill_all_excel_processes() -> None:
+    """Force-close every EXCEL.EXE process on the machine, including any not
+    owned by this controller. In the kiosk exam context this is intentional:
+    no unrelated Excel work is expected to be open on the machine, and a
+    fresh launch must never inherit a stray process left over from a
+    previous crashed or aborted run."""
+    import subprocess
+
+    subprocess.run(
+        ["taskkill", "/F", "/IM", "EXCEL.EXE", "/T"],
+        capture_output=True,
+    )
+
+
 class WinExcelController(ExcelController):
     can_position = True
     can_guard_close = True
+    can_toggle_chrome = True
 
     def __init__(self) -> None:
         self._excel = None          # Excel.Application COM object
@@ -116,6 +131,14 @@ class WinExcelController(ExcelController):
             True,
         )
         win32gui.SetForegroundWindow(hwnd)
+
+    def set_chrome_visible(self, visible: bool) -> None:
+        if self._excel is None:
+            return
+        try:
+            self._excel.DisplayFullScreen = not visible
+        except Exception:
+            pass
 
     # -- save / close ------------------------------------------------------
 

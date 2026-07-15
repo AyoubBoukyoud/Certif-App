@@ -59,6 +59,12 @@ ORG_NAME: str = "MOS"
 PANEL_HEIGHT_FRACTION: float = 0.25
 PANEL_MIN_HEIGHT: int = 260                # px floor for very short screens
 PANEL_HEIGHT: int = 260                    # fallback when no screen size is known
+# Size of the Excel window itself, as a fraction of the screen's width/height.
+# 1.0 x 1.0 -> Excel fills the entire screen. The task panel stays on top of
+# it (WindowStaysOnTopHint), so it remains visible even though it now
+# overlaps the bottom of the Excel window (sheet-tab strip included).
+EXCEL_WIDTH_FRACTION: float = 1.0
+EXCEL_HEIGHT_FRACTION: float = 1.0
 # Extra vertical room handed to Excel (taken out of the panel's share) so an
 # intermittent Excel notification bar (e.g. the "product not activated"
 # banner) never pushes the sheet-tab strip below the visible window edge.

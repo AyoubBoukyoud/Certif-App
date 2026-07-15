@@ -142,7 +142,6 @@ class SystemCheckScreen(QWidget):
 
         self.retry_btn = QPushButton("Relancer les vérifications")
         self.retry_btn.setObjectName("Secondary")
-        self.retry_btn.setMinimumHeight(46)
         self.retry_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.retry_btn.clicked.connect(self.start_check)
 
@@ -153,7 +152,6 @@ class SystemCheckScreen(QWidget):
 
         self.continue_btn = QPushButton("Continuer")
         self.continue_btn.setObjectName("Primary")
-        self.continue_btn.setMinimumHeight(46)
         self.continue_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.continue_btn.clicked.connect(self.ready.emit)
         self.continue_btn.setVisible(False)
