@@ -3,9 +3,11 @@ from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
+    QFrame,
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -60,7 +62,8 @@ class ResultsScreen(QWidget):
         btn_row.addWidget(next_btn)
         btn_row.addStretch(1)
 
-        outer = QVBoxLayout(self)
+        content = QWidget()
+        outer = QVBoxLayout(content)
         outer.setContentsMargins(50, 44, 50, 40)
         outer.addStretch(1)
         outer.addWidget(self.title)
@@ -69,6 +72,19 @@ class ResultsScreen(QWidget):
         outer.addSpacing(28)
         outer.addLayout(btn_row)
         outer.addStretch(1)
+
+        # ---- Scroll wrapper: guarantees every element stays reachable
+        # even if the window is smaller than the content needs. ----
+        scroll = QScrollArea()
+        scroll.setObjectName("FormScroll")
+        scroll.setWidget(content)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.addWidget(scroll)
 
     def show_result(self, result: GradeResult, threshold: int,
                     projects: dict[int, str]) -> None:

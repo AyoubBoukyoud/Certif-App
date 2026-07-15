@@ -3,10 +3,12 @@ from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
+    QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -75,7 +77,8 @@ class ReviewBoard(QWidget):
         btn_row.addWidget(finish)
         btn_row.addStretch(1)
 
-        outer = QVBoxLayout(self)
+        content = QWidget()
+        outer = QVBoxLayout(content)
         outer.setContentsMargins(50, 40, 50, 36)
         outer.addWidget(self.title)
         outer.addWidget(self.subtitle)
@@ -83,6 +86,19 @@ class ReviewBoard(QWidget):
         outer.addWidget(self.grid_host, 1)
         outer.addSpacing(16)
         outer.addLayout(btn_row)
+
+        # ---- Scroll wrapper: guarantees every project card stays reachable
+        # even if the window is smaller than the content needs. ----
+        scroll = QScrollArea()
+        scroll.setObjectName("FormScroll")
+        scroll.setWidget(content)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.addWidget(scroll)
 
     def refresh(self) -> None:
         assert self.session is not None

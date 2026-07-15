@@ -2,7 +2,15 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
+)
 
 from .. import config
 from . import widgets
@@ -61,7 +69,8 @@ class InstructionsScreen(QWidget):
         btn_row.addWidget(self.start_btn)
         btn_row.addStretch(1)
 
-        outer = QVBoxLayout(self)
+        content = QWidget()
+        outer = QVBoxLayout(content)
         outer.setContentsMargins(40, 40, 40, 40)
         outer.addStretch(1)
         outer.addWidget(title)
@@ -71,6 +80,19 @@ class InstructionsScreen(QWidget):
         outer.addSpacing(24)
         outer.addLayout(btn_row)
         outer.addStretch(1)
+
+        # ---- Scroll wrapper: guarantees every element stays reachable
+        # even if the window is smaller than the content needs. ----
+        scroll = QScrollArea()
+        scroll.setObjectName("FormScroll")
+        scroll.setWidget(content)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.addWidget(scroll)
 
     def set_candidate(self, first: str, last: str, variant: str) -> None:
         self._name_lbl.setText(f"Candidat : {first} {last}  ·  Épreuve {variant}")

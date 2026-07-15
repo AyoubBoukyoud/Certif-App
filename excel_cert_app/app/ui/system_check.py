@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QProgressBar,
     QPushButton,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -171,12 +172,26 @@ class SystemCheckScreen(QWidget):
         card_row.addWidget(card)
         card_row.addStretch(1)
 
-        outer = QVBoxLayout(self)
+        content = QWidget()
+        outer = QVBoxLayout(content)
         outer.setContentsMargins(30, 26, 30, 26)
         outer.addWidget(title)
         outer.addWidget(subtitle)
         outer.addSpacing(16)
         outer.addLayout(card_row)
+
+        # ---- Scroll wrapper: guarantees every element stays reachable
+        # even if the window is smaller than the content needs. ----
+        scroll = QScrollArea()
+        scroll.setObjectName("FormScroll")
+        scroll.setWidget(content)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.addWidget(scroll)
 
     def focus_default(self) -> None:
         if self.continue_btn.isVisible():

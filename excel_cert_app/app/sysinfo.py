@@ -84,24 +84,39 @@ def is_windows() -> bool:
 
 # -- Office apps --------------------------------------------------------------
 
+def _open_key_any_view(hive, subkey: str):
+    """Office is commonly installed 32-bit even on 64-bit Windows, in which
+    case its COM registration (CLSID\\LocalServer32) only exists in the
+    32-bit registry view (WOW6432Node) — invisible to a 64-bit Python
+    process using a plain OpenKey. Try the native view first, then the
+    32-bit view, so detection works regardless of Office's or Python's
+    bitness."""
+    import winreg
+
+    for flag in (0, winreg.KEY_WOW64_32KEY, winreg.KEY_WOW64_64KEY):
+        try:
+            return winreg.OpenKey(hive, subkey, 0, winreg.KEY_READ | flag)
+        except OSError:
+            continue
+    return None
+
+
 def _exe_path_from_progid(progid: str) -> str | None:
     """COM Application ProgIDs (e.g. "Excel.Application") register their
     server under CLSID\\LocalServer32, not shell\\open\\command — the latter
     only exists for file-type ProgIDs like "Excel.Sheet.12"."""
     import winreg
 
-    try:
-        with winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, f"{progid}\\CLSID") as key:
-            clsid, _ = winreg.QueryValueEx(key, None)
-    except OSError:
+    key = _open_key_any_view(winreg.HKEY_CLASSES_ROOT, f"{progid}\\CLSID")
+    if key is None:
         return None
-    try:
-        with winreg.OpenKey(
-            winreg.HKEY_CLASSES_ROOT, f"CLSID\\{clsid}\\LocalServer32"
-        ) as key:
-            command, _ = winreg.QueryValueEx(key, None)
-    except OSError:
+    with key:
+        clsid, _ = winreg.QueryValueEx(key, None)
+    key = _open_key_any_view(winreg.HKEY_CLASSES_ROOT, f"CLSID\\{clsid}\\LocalServer32")
+    if key is None:
         return None
+    with key:
+        command, _ = winreg.QueryValueEx(key, None)
     match = re.match(r'\s*"([^"]+)"', command)
     if match:
         return match.group(1)
@@ -170,8 +185,13 @@ def office_activation(sample_app_path: str | None) -> tuple[bool | None, str]:
     if not sample_app_path:
         return None, "Aucune application Office trouvée pour localiser OSPP.VBS."
     office_dir = os.path.dirname(sample_app_path)
-    ospp = os.path.join(office_dir, "OSPP.VBS")
-    if not os.path.isfile(ospp):
+    # Click-to-Run keeps OSPP.VBS in the shared "Office16" folder, one level
+    # above the versioned "Root\Office16" folder that holds the actual EXEs
+    # — so it is never actually next to the detected app on a C2R install.
+    candidates = [office_dir, office_dir.replace(f"{os.sep}Root{os.sep}", os.sep)]
+    ospp = next((os.path.join(d, "OSPP.VBS") for d in candidates
+                if os.path.isfile(os.path.join(d, "OSPP.VBS"))), None)
+    if not ospp:
         return None, "OSPP.VBS introuvable à côté de l'installation détectée."
     try:
         proc = subprocess.run(
