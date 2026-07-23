@@ -54,6 +54,7 @@ VARIANT_PROJECTS: dict[str, list[int]] = {
 
 APP_NAME: str = "Simulateur de Certification Excel"
 ORG_NAME: str = "MOS"
+APP_VERSION: str = "1.0.0"  # bumped by hand; surfaced in remote audit_logs rows
 # The bottom task panel takes this fraction of the screen height (Excel gets the
 # rest). 0.25 -> panel = 1/4 of the screen, Excel = 3/4.
 PANEL_HEIGHT_FRACTION: float = 0.25

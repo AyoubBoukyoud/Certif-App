@@ -24,16 +24,27 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+import json
+import platform
+import socket
+
 from .. import config, excel, kiosk
 from ..db import results_export
 from ..db.dao import Database
 from ..exam.session import ExamSession, ExamState
 from ..exam import variants, workdir
+from ..supabase_service import audit as supabase_audit
+from ..supabase_service import auth as supabase_auth
+from ..supabase_service import candidates as candidates_service
+from ..supabase_service import exam_sessions as exam_sessions_service
+from ..supabase_service.client import get_client
 from . import theme
 from .admin_dialog import AdminCodeDialog, AdminSetupDialog
 from .system_check import SystemCheckScreen
 from .instructions import InstructionsScreen
-from .registration import RegistrationScreen
+from .candidate_lookup import CandidateLookupScreen
+from .preparation import PreparationScreen
+from .supervisor_validation import SupervisorValidationDialog
 from .results import ResultsScreen
 from .review_board import ReviewBoard
 from .task_panel import TaskPanel
@@ -41,6 +52,18 @@ from .task_panel import TaskPanel
 _WATCHDOG_MS = 700
 _CLOCK_MS = 1000
 _AUTOSAVE_S = 60
+
+
+def _iso_to_ddmmyyyy(iso_date: str | None) -> str:
+    """Supabase returns `date` columns as ISO (YYYY-MM-DD); the local
+    schema/UI convention elsewhere in this app is dd/MM/yyyy."""
+    if not iso_date:
+        return ""
+    parts = iso_date.split("-")
+    if len(parts) != 3:
+        return iso_date
+    year, month, day = parts
+    return f"{day}/{month}/{year}"
 
 
 class AppController:
@@ -56,16 +79,29 @@ class AppController:
         self.session = ExamSession(self.db)
 
         self._last_autosave = 0
+        # Set from the confirmed candidate's own record at Écran 2 — the
+        # kiosk holds no établissement session of its own (see
+        # supabase_service/candidates.py, auth.py).
+        self._etablissement_id: str | None = None
+        self._supervisor = None            # SupervisorIdentity, set at Écran 3
+        self._online_session_id: str | None = None  # remote exam_sessions.id
+        # (online_session_id, supervisor_client, result) for Écran 5 syncs that
+        # failed and haven't been retried successfully yet — in-memory only,
+        # this app is "always online" so a persistent offline queue is not
+        # built (see ~/.claude/plans/harmonic-cuddling-flask.md, decision log).
+        self._failed_syncs: list[tuple[str, object, object]] = []
 
         # -- screens --
         self.stack = QStackedWidget()
         self.system_check = SystemCheckScreen()
-        self.registration = RegistrationScreen()
+        self.candidate_lookup = CandidateLookupScreen()
+        self.candidate_lookup.lookup_fn = self._lookup_candidate
+        self.preparation = PreparationScreen()
         self.instructions = InstructionsScreen()
         self.review = ReviewBoard()
         self.results = ResultsScreen()
-        for w in (self.system_check, self.registration, self.instructions,
-                  self.review, self.results):
+        for w in (self.system_check, self.candidate_lookup, self.preparation,
+                  self.instructions, self.review, self.results):
             self.stack.addWidget(w)
 
         self.main = QMainWindow()
@@ -82,9 +118,9 @@ class AppController:
         # -- signals --
         self.system_check.ready.connect(self._on_system_check_passed)
         self.system_check.quit_requested.connect(self._confirm_quit)
-        self.registration.submitted.connect(self._on_registered)
-        self.registration.admin_requested.connect(lambda: self._open_admin(False))
-        self.registration.quick_test_requested.connect(self._on_quick_test)
+        self.candidate_lookup.candidate_confirmed.connect(self._on_candidate_confirmed)
+        self.candidate_lookup.admin_requested.connect(lambda: self._open_admin(False))
+        self.candidate_lookup.quick_test_requested.connect(self._on_quick_test)
         self.instructions.start_clicked.connect(self._on_start)
         self.panel.submit_project.connect(self._on_submit_project)
         self.panel.logout_requested.connect(lambda: self._open_admin(True))
@@ -287,11 +323,18 @@ class AppController:
         self.excel.start()
         self.lock.engage()
 
+        summary = self.system_check.last_summary
+        self._remote_audit(
+            "system_check",
+            result="ok" if summary.get("critical_ok") else "warning",
+            message=json.dumps(summary),
+        )
+
         running = self.db.get_running_session() if self._resume_on_ready else None
         if running:
             self._prompt_resume(running.id)
         else:
-            self._goto_registration()
+            self._goto_candidate_lookup()
 
     def _prompt_resume(self, session_id: int) -> None:
         s = self.db.get_session(session_id)
@@ -311,23 +354,82 @@ class AppController:
             workdir.archive_session(session_id)
             self.session = ExamSession(self.db)
             self.panel.session = self.session
-            self._goto_registration()
+            self._goto_candidate_lookup()
 
-    def _goto_registration(self) -> None:
+    def _goto_candidate_lookup(self) -> None:
         self.clock_timer.stop()
         self.watchdog.stop()
-        self.registration.reset()
-        self._show_fullscreen(self.registration)
+        self.candidate_lookup.reset()
+        self._show_fullscreen(self.candidate_lookup)
+
+    def _lookup_candidate(self, cin: str):
+        """Multiple attempts per candidate are allowed on purpose — no
+        exam_sessions duplicate check here (see `candidates.find_by_cin`)."""
+        return candidates_service.find_by_cin(get_client(), cin)
+
+    def _remote_audit(self, event: str, *, result: str = "ok", message: str = "") -> None:
+        """Mirrors a subset of local `self.db.audit(...)` calls to the
+        remote `audit_logs` (see `app/supabase_service/audit.py`) — only
+        where it matters for the cahier des charges (system check,
+        escape attempts, Excel crashes), not every local event. Works before
+        any candidate is found too (`self._etablissement_id` is None until
+        `_on_candidate_confirmed` sets it) — the underlying RPC accepts a
+        null étab­lissement_id."""
+        supabase_audit.log(
+            get_client(), self.db, event,
+            etablissement_id=self._etablissement_id, result=result, message=message,
+        )
 
     # -- flow --------------------------------------------------------------
 
-    def _on_registered(self, first, last, cin, birth_date, institution) -> None:
-        cid = self.db.create_candidate(first, last, cin, birth_date, institution)
+    def _on_candidate_confirmed(self, record) -> None:
+        """The exam is attached to whichever établissement this candidate
+        belongs to — the kiosk holds no établissement session of its own
+        (see `app/supabase_service/candidates.py`, `auth.py`)."""
+        self._etablissement_id = record.etablissement_id
+        dlg = SupervisorValidationDialog(
+            record.etablissement_id, supabase_auth.sign_in_supervisor, self.main,
+        )
+        if dlg.exec() != dlg.DialogCode.Accepted or dlg.identity is None:
+            return
+        self._supervisor = dlg.identity
+        self._show_fullscreen(self.preparation)
+        QTimer.singleShot(50, lambda: self._prepare_and_launch(record))
+
+    def _prepare_and_launch(self, record) -> None:
+        """Écran 4: creates the remote `exam_sessions` row (Écran 3's
+        actual write, deferred here so the button click itself stays
+        instant) and the local session, then jumps to Instructions —
+        Excel project files are already bundled locally
+        (`config.PROJECTS_DIR`), so there is nothing to download here."""
+        hostname = platform.node()
+        try:
+            ip_local = socket.gethostbyname(hostname)
+        except OSError:
+            ip_local = None
+        try:
+            self._online_session_id = exam_sessions_service.start(
+                self._supervisor.client,
+                candidate_id=record.id,
+                exam_schedule_id=record.exam_schedule_id,
+                supervisor_id=self._supervisor.profile_id,
+                workstation=hostname,
+                hostname=hostname,
+                ip_local=ip_local,
+            )
+        except Exception as exc:
+            self._online_session_id = None
+            self.db.audit("online_session_start_error", detail=str(exc))
+
+        cid = self.db.create_candidate(
+            record.first_name, record.last_name, record.cin,
+            _iso_to_ddmmyyyy(record.birth_date), record.etablissement_name,
+        )
         variant = variants.next_variant(self.db)
         self.session = ExamSession(self.db)
         self.panel.session = self.session
         self.session.create(cid, variant)
-        self.instructions.set_candidate(first, last, variant)
+        self.instructions.set_candidate(record.first_name, record.last_name, variant)
         self._show_fullscreen(self.instructions)
 
     def _on_start(self) -> None:
@@ -465,16 +567,69 @@ class AppController:
         except Exception as exc:
             self.db.audit("results_export_error", self.session.session_id, str(exc))
 
+        sync_status = self._sync_online_finish(result)
+
         titles = {pno: self.session.projects[pno].title
                   for pno in self.session.project_nos}
         self.results.show_result(result, self.session.pass_threshold, titles)
+        self.results.set_sync_status(sync_status)
         self._show_fullscreen(self.results)
+
+    def _sync_online_finish(self, result) -> str:
+        """Écran 5: closes out the remote `exam_sessions` row opened at
+        Écran 3. A failure here is logged locally (matching this app's
+        existing best-effort pattern for `results_export`, just above) and
+        left for a manual retry via the admin "Exporter les résultats"
+        action — the poste is expected to always be online, so this should
+        be rare, not a routine offline queue. Returns the status shown on
+        the results screen: 'synced' / 'pending' / 'unavailable'."""
+        if self._online_session_id is None or self._supervisor is None:
+            return "unavailable"
+        try:
+            exam_sessions_service.finish(
+                self._supervisor.client, self._online_session_id,
+                score_pct=result.score_pct, passed=result.passed,
+                desktop_session_uuid=str(self.session.session_id),
+            )
+            self.db.audit("online_session_synced", self.session.session_id)
+            return "synced"
+        except Exception as exc:
+            self.db.audit("online_sync_error", self.session.session_id, str(exc))
+            self._failed_syncs.append(
+                (self._online_session_id, self._supervisor.client, result)
+            )
+            return "pending"
+
+    def _retry_failed_syncs(self, parent) -> None:
+        message = "Les résultats sont enregistrés après chaque test."
+        if self._failed_syncs:
+            still_failed = []
+            synced = 0
+            for online_id, client, result in self._failed_syncs:
+                try:
+                    exam_sessions_service.finish(
+                        client, online_id,
+                        score_pct=result.score_pct, passed=result.passed,
+                    )
+                    synced += 1
+                except Exception:
+                    still_failed.append((online_id, client, result))
+            self._failed_syncs = still_failed
+            message += (
+                f"\n\n{synced} synchronisation(s) en attente ont réussi."
+                + (f" {len(still_failed)} en échec, nouvelle tentative au "
+                   "prochain export." if still_failed else "")
+            )
+        QMessageBox.information(parent, "Export", message)
 
     def _on_next_candidate(self) -> None:
         self.session.cleanup()
         self.session = ExamSession(self.db)
         self.panel.session = self.session
-        self._goto_registration()
+        self._supervisor = None
+        self._online_session_id = None
+        self._etablissement_id = None
+        self._goto_candidate_lookup()
 
     # -- timers ------------------------------------------------------------
 
@@ -503,6 +658,7 @@ class AppController:
         if not self.excel.is_alive() and self.session.state == ExamState.RUNNING:
             # Excel crashed — relaunch and reopen the current work file.
             self.db.audit("excel_crash", self.session.session_id)
+            self._remote_audit("excel_crash", result="error")
             try:
                 self.excel.start()
                 self._open_current_project()
@@ -529,6 +685,7 @@ class AppController:
 
     def _on_escape(self, detail: str) -> None:
         self.db.audit("escape_attempt", self.session.session_id, detail)
+        self._remote_audit("escape_attempt", result="warning", message=detail)
 
     def _open_admin(self, in_exam: bool) -> None:
         parent = self.panel if in_exam and self.panel.isVisible() else self.main
@@ -542,14 +699,16 @@ class AppController:
             self.session.cleanup()
             self.session = ExamSession(self.db)
             self.panel.session = self.session
+            self._supervisor = None
+            self._online_session_id = None
+            self._etablissement_id = None
             self.clock_timer.stop()
             self.watchdog.stop()
-            self._goto_registration()
+            self._goto_candidate_lookup()
         elif action == "settings":
             AdminSetupDialog(self.db, parent).exec()
         elif action == "export":
-            QMessageBox.information(parent, "Export",
-                                    "Les résultats sont enregistrés après chaque test.")
+            self._retry_failed_syncs(parent)
 
     def _confirm_quit(self) -> None:
         parent = self.panel if self.panel.isVisible() else self.main

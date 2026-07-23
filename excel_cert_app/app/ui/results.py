@@ -40,11 +40,16 @@ class ResultsScreen(QWidget):
         self.detail = widgets.label("", "FieldLabel", Qt.AlignmentFlag.AlignCenter)
         self.breakdown = QVBoxLayout()
 
+        self.sync_label = QLabel("")
+        self.sync_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
         self.body.addWidget(self.score)
         self.body.addWidget(self.verdict)
         self.body.addWidget(self.detail)
         self.body.addSpacing(10)
         self.body.addLayout(self.breakdown)
+        self.body.addSpacing(6)
+        self.body.addWidget(self.sync_label)
 
         card_row = QHBoxLayout()
         card_row.addStretch(1)
@@ -114,6 +119,26 @@ class ResultsScreen(QWidget):
             self.breakdown.addWidget(
                 widgets.label(f"Projet {pno} — {name} : {p}/{tot}", "FieldLabel")
             )
+
+        self.sync_label.setText("")
+
+    def set_sync_status(self, status: str) -> None:
+        """Reflects `AppController._sync_online_finish`'s outcome — 'synced',
+        'pending' (write failed, retried via the admin "Exporter les
+        résultats" action; see `_retry_failed_syncs`), or 'unavailable' (no
+        remote `exam_sessions` row was ever opened for this attempt)."""
+        texts = {
+            "synced": "Résultat enregistré en ligne ✓",
+            "pending": "En attente de synchronisation — nouvelle tentative "
+                       "via le panneau administrateur.",
+            "unavailable": "Résultat non synchronisé en ligne — contactez "
+                           "l'administrateur.",
+        }
+        names = {"synced": "StatusOk", "pending": "StatusWarning", "unavailable": "StatusBad"}
+        self.sync_label.setText(texts.get(status, ""))
+        self.sync_label.setObjectName(names.get(status, ""))
+        self.sync_label.style().unpolish(self.sync_label)
+        self.sync_label.style().polish(self.sync_label)
 
     def focus_default(self) -> None:
         self.next_btn.setFocus()

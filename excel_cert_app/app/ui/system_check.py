@@ -7,6 +7,8 @@ not required to run the exam).
 """
 from __future__ import annotations
 
+import shutil
+
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QApplication,
@@ -21,8 +23,13 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from .. import sysinfo
+from .. import config, sysinfo
+from ..supabase_service import connectivity
 from . import widgets
+
+_DISK_WARN_BYTES = 2 * 1024**3     # 2 Go
+_DISK_ERROR_BYTES = 500 * 1024**2  # 500 Mo
+_CLOCK_SKEW_WARN_S = 5 * 60        # 5 min
 
 
 def _status_label(ok: bool | None, yes: str, no: str, unknown: str = "?") -> QLabel:
@@ -43,6 +50,7 @@ class SystemCheckScreen(QWidget):
         super().__init__()
         self.setObjectName("Screen")
         self._checking = False
+        self.last_summary: dict = {}
         self._build()
 
     # -- layout ---------------------------------------------------------
@@ -134,6 +142,31 @@ class SystemCheckScreen(QWidget):
         self.win_activation_detail = widgets.label("", "CardSubtitle")
         win_info.addWidget(self.win_activation_detail, 3, 0, 1, 2)
         body.addLayout(win_info)
+        body.addSpacing(10)
+
+        divider3 = QFrame()
+        divider3.setFrameShape(QFrame.Shape.HLine)
+        body.addWidget(divider3)
+        body.addSpacing(10)
+
+        # -- Connectivité --
+        body.addWidget(widgets.label("Connectivité et poste", "CardTitle"))
+        conn_info = QGridLayout()
+        conn_info.setHorizontalSpacing(10)
+        conn_info.setVerticalSpacing(6)
+        conn_info.addWidget(widgets.label("Connexion Internet", "FieldLabel"), 0, 0)
+        self.internet_lbl = widgets.label("—", "StatusUnknown")
+        conn_info.addWidget(self.internet_lbl, 0, 1)
+        conn_info.addWidget(widgets.label("Connexion à la plateforme", "FieldLabel"), 1, 0)
+        self.supabase_lbl = widgets.label("—", "StatusUnknown")
+        conn_info.addWidget(self.supabase_lbl, 1, 1)
+        conn_info.addWidget(widgets.label("Heure système", "FieldLabel"), 2, 0)
+        self.clock_lbl = widgets.label("—", "StatusUnknown")
+        conn_info.addWidget(self.clock_lbl, 2, 1)
+        conn_info.addWidget(widgets.label("Espace disque", "FieldLabel"), 3, 0)
+        self.disk_lbl = widgets.label("—", "StatusUnknown")
+        conn_info.addWidget(self.disk_lbl, 3, 1)
+        body.addLayout(conn_info)
         body.addSpacing(14)
 
         self.error = widgets.label("", "ErrorBanner")
@@ -222,6 +255,10 @@ class SystemCheckScreen(QWidget):
         self._set_status_style(self.win_activation_lbl, None)
         self.win_activation_lbl.setText("—")
         self.win_activation_detail.setText("")
+        for lbl in (self.internet_lbl, self.supabase_lbl, self.clock_lbl, self.disk_lbl):
+            lbl.setText("—")
+            self._set_status_style(lbl, None)
+        self.last_summary = {}
         # Defer past the current paint so the reset above is visible before
         # the first (blocking) probe runs.
         QTimer.singleShot(50, self._run_check)
@@ -236,11 +273,24 @@ class SystemCheckScreen(QWidget):
         label.style().unpolish(label)
         label.style().polish(label)
 
+    def _set_warning_style(self, label: QLabel, level: str) -> None:
+        """Like `_set_status_style`, plus a non-blocking "warning" level
+        (⚠) between StatusOk and StatusBad — used for checks that should
+        not, by themselves, disable Continuer (heure système, espace
+        disque)."""
+        names = {"ok": "StatusOk", "warning": "StatusWarning", "bad": "StatusBad"}
+        label.setObjectName(names.get(level, "StatusUnknown"))
+        label.style().unpolish(label)
+        label.style().polish(label)
+
     def _run_check(self) -> None:
         if not sysinfo.is_windows():
             self._set_step("Environnement de développement détecté — vérification "
                            "ignorée.")
-            self._finish(excel_supported=True)
+            self.last_summary = {"excel_supported": True, "internet_ok": True,
+                                 "supabase_ok": True, "clock_skew_s": 0,
+                                 "disk_free_gb": 999, "critical_ok": True}
+            self._finish(True)
             return
 
         self._set_step("Recherche des applications Microsoft Office…")
@@ -288,24 +338,74 @@ class SystemCheckScreen(QWidget):
         excel = next((a for a in apps if a.key == "excel"), None)
         supported = bool(excel and excel.found and excel.version
                          and sysinfo.version_supported(excel.version))
-        self._finish(supported)
 
-    def _finish(self, excel_supported: bool) -> None:
+        self._set_step("Vérification de la connexion Internet…")
+        internet_ok = connectivity.check_internet()
+        self.internet_lbl.setText("Connecté" if internet_ok else "Aucune connexion")
+        self._set_status_style(self.internet_lbl, internet_ok)
+
+        self._set_step("Vérification de la connexion à la plateforme…")
+        supabase_ok, server_time = connectivity.check_supabase()
+        self.supabase_lbl.setText("Connecté" if supabase_ok else "Injoignable")
+        self._set_status_style(self.supabase_lbl, supabase_ok)
+
+        self._set_step("Vérification de l'heure système…")
+        skew = connectivity.clock_skew_seconds(server_time)
+        if skew is None:
+            self.clock_lbl.setText("Indéterminée")
+            self._set_warning_style(self.clock_lbl, "unknown")
+        elif skew > _CLOCK_SKEW_WARN_S:
+            self.clock_lbl.setText(f"Écart de {int(skew // 60)} min avec la plateforme")
+            self._set_warning_style(self.clock_lbl, "warning")
+        else:
+            self.clock_lbl.setText("Synchronisée")
+            self._set_warning_style(self.clock_lbl, "ok")
+
+        self._set_step("Vérification de l'espace disque…")
+        free_bytes = shutil.disk_usage(config.DATA_DIR).free
+        free_gb = free_bytes / 1024**3
+        disk_ok = free_bytes >= _DISK_ERROR_BYTES
+        disk_warn = free_bytes < _DISK_WARN_BYTES
+        self.disk_lbl.setText(f"{free_gb:.1f} Go libres")
+        self._set_warning_style(
+            self.disk_lbl, "bad" if not disk_ok else "warning" if disk_warn else "ok"
+        )
+
+        critical_ok = supported and internet_ok and supabase_ok and disk_ok
+        self.last_summary = {
+            "excel_supported": supported,
+            "internet_ok": internet_ok,
+            "supabase_ok": supabase_ok,
+            "clock_skew_s": skew,
+            "disk_free_gb": round(free_gb, 1),
+            "critical_ok": critical_ok,
+        }
+        self._finish(critical_ok)
+
+    def _finish(self, critical_ok: bool) -> None:
         self._checking = False
         self.progress.setVisible(False)
         self.retry_btn.setEnabled(True)
         self.quit_btn.setEnabled(True)
-        if excel_supported:
+        if critical_ok:
             self.step_lbl.setText("Vérification terminée.")
             self.error.setVisible(False)
             self.continue_btn.setVisible(True)
             self.continue_btn.setFocus()
         else:
             self.step_lbl.setText("Vérification terminée — problème détecté.")
+            reasons = []
+            if not self.last_summary.get("excel_supported"):
+                reasons.append("Microsoft Excel 2016 ou plus récent est requis")
+            if not self.last_summary.get("internet_ok"):
+                reasons.append("aucune connexion Internet")
+            if not self.last_summary.get("supabase_ok"):
+                reasons.append("la plateforme est injoignable")
+            if not self.last_summary.get("disk_free_gb") or self.last_summary["disk_free_gb"] < 0.5:
+                reasons.append("espace disque insuffisant")
             self.error.setText(
-                "L'examen nécessite Microsoft Excel 2016 ou une version plus "
-                "récente, installé sur ce poste. Installez ou mettez à jour "
-                "Microsoft Excel, puis relancez la vérification."
+                "Impossible de continuer : " + ", ".join(reasons) + ". "
+                "Corrigez le problème puis relancez la vérification."
             )
             self.error.setVisible(True)
             self.continue_btn.setVisible(False)

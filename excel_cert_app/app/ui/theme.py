@@ -356,6 +356,7 @@ QPushButton#PanelHandle:hover {{ background: {btn_hover}; }}
 QLabel#StatusOk {{ color: {verdict_pass}; font-weight: 700; }}
 QLabel#StatusBad {{ color: {verdict_fail}; font-weight: 700; }}
 QLabel#StatusUnknown {{ color: {field_label}; font-weight: 700; }}
+QLabel#StatusWarning {{ color: {clock_low}; font-weight: 700; }}
 QProgressBar {{
     background: {input_bg};
     border: none;

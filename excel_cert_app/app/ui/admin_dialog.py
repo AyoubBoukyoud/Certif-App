@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import time
 
-from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -55,7 +54,8 @@ class AdminSetupDialog(QDialog):
         buttons.button(QDialogButtonBox.StandardButton.Save).setDefault(True)
 
         lay = QVBoxLayout(self)
-        lay.addWidget(QLabel("Définissez le code administrateur et les paramètres."))
+        lay.addWidget(QLabel("Définissez le code administrateur et les paramètres "
+                             "de ce poste."))
         lay.addLayout(form)
         lay.addWidget(self.error)
         lay.addWidget(buttons)
@@ -70,6 +70,7 @@ class AdminSetupDialog(QDialog):
         if c1 != c2:
             self.error.setText("Les deux codes ne correspondent pas.")
             return
+
         self.db.set_admin_code(c1)
         self.db.set_setting("results_xlsx_path", self.results.text().strip())
         self.db.set_setting("exam_minutes", self.minutes.text().strip() or "50")

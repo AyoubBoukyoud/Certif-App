@@ -26,6 +26,11 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 
+# Secrets
+.env
+.env.*
+!.env.example
+
 # App-specific runtime
 *.sqlite3
 excel_cert_app/excel_cert.sqlite3
@@ -34,3 +39,7 @@ logs/
 archive/
 resultats.xlsx
 resultats_*.xlsx
+
+# Web dashboard (Node)
+node_modules/
+dist/
