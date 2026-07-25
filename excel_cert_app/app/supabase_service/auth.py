@@ -25,7 +25,7 @@ class SupervisorAuthError(RuntimeError):
 class SupervisorIdentity:
     profile_id: str
     full_name: str
-    etablissement_id: str
+    etablissement_id: str | None  # None for a roaming ("all établissements") surveillant
     # The authenticated client from this sign-in — writes to `exam_sessions`
     # require an actual `surveillant` session per RLS (see 0001's
     # exam_attempts_insert/update_surveillant policies), so the caller keeps
@@ -60,7 +60,11 @@ def sign_in_supervisor(
     profile = _fetch_profile(client, result.user.id)
     if profile.get("role") != "surveillant":
         raise SupervisorAuthError("Ce compte n'est pas un compte surveillant.")
-    if profile.get("etablissement_id") != expected_etablissement_id:
+    # etablissement_id is None for a "roaming" surveillant (created with
+    # all_etablissements=true — see manage-user's handleCreate) — that
+    # matches any établissement instead of none.
+    profile_etab_id = profile.get("etablissement_id")
+    if profile_etab_id is not None and profile_etab_id != expected_etablissement_id:
         raise SupervisorAuthError(
             "Ce surveillant n'est pas affecté à cet établissement/cette session."
         )

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useLayoutEffect, useState, type FormEvent } from "react";
 import { useAuth } from "../lib/AuthContext";
 import { supabase } from "../lib/supabaseClient";
 import type { Database, ExamScheduleStatus } from "../lib/database.types";
@@ -10,8 +10,11 @@ import { Modal } from "../components/Modal";
 import { AccountRowActions } from "../components/AccountRowActions";
 import { AccountDetailModal } from "../components/AccountDetailModal";
 import { AccountEditModal } from "../components/AccountEditModal";
+import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import { IconPlus } from "../components/icons";
 import { createAccount, toggleActive, resetPassword, updateAccount, deleteAccount } from "../lib/manageUser";
+import { usePersistentState } from "../lib/usePersistentState";
+import { readCache, writeCache } from "../lib/dataCache";
 
 type Complexe = Database["public"]["Tables"]["complexes"]["Row"];
 type Etablissement = Database["public"]["Tables"]["etablissements"]["Row"];
@@ -23,25 +26,42 @@ const MOS_VERSIONS = ["Excel2016", "Word2016", "PPT2016", "ExcelExpert2016"];
 const STATUS_OPTIONS: ExamScheduleStatus[] = ["scheduled", "open", "in_progress", "closed", "cancelled"];
 const MONTH_FORMATTER = new Intl.DateTimeFormat("fr-FR", { month: "short", year: "numeric" });
 
+interface CachedRegionalData {
+  complexes: Complexe[];
+  complexeProfiles: Profile[];
+  etablissements: Etablissement[];
+  sessions: ExamSchedule[];
+  candidatesCount: number;
+  passRate: { pct: number | null; detail: string };
+  examsByMonth: { label: string; value: number }[];
+}
+
+const regionalCacheKey = (regionId: string) => `regional-dash:data:${regionId}`;
+
 export function RegionalDashboard() {
   const { profile } = useAuth();
   // A 'national' caller has no region_id of its own — it picks which region
   // to act as Direction Régionale for, from every region that exists.
   const isNational = profile?.role === "national";
   const [regions, setRegions] = useState<Region[]>([]);
-  const [selectedRegionId, setSelectedRegionId] = useState("");
+  const [selectedRegionId, setSelectedRegionId] = usePersistentState("regional-dash:selectedRegionId", "");
   const regionId = isNational ? selectedRegionId : profile?.region_id ?? "";
 
-  const [complexes, setComplexes] = useState<Complexe[]>([]);
-  const [complexeProfiles, setComplexeProfiles] = useState<Profile[]>([]);
-  const [etablissements, setEtablissements] = useState<Etablissement[]>([]);
-  const [sessions, setSessions] = useState<ExamSchedule[]>([]);
-  const [candidatesCount, setCandidatesCount] = useState(0);
-  const [passRate, setPassRate] = useState<{ pct: number | null; detail: string }>({
-    pct: null,
-    detail: "",
-  });
-  const [examsByMonth, setExamsByMonth] = useState<{ label: string; value: number }[]>([]);
+  // Lazily hydrated from the module-level cache (see lib/dataCache) so a
+  // remount — e.g. clicking to another sidebar page and back — repaints the
+  // last known data immediately instead of resetting to empty/zero.
+  const regionalCached = readCache<CachedRegionalData>(regionalCacheKey(regionId));
+  const [complexes, setComplexes] = useState<Complexe[]>(regionalCached?.complexes ?? []);
+  const [complexeProfiles, setComplexeProfiles] = useState<Profile[]>(regionalCached?.complexeProfiles ?? []);
+  const [etablissements, setEtablissements] = useState<Etablissement[]>(regionalCached?.etablissements ?? []);
+  const [sessions, setSessions] = useState<ExamSchedule[]>(regionalCached?.sessions ?? []);
+  const [candidatesCount, setCandidatesCount] = useState(regionalCached?.candidatesCount ?? 0);
+  const [passRate, setPassRate] = useState<{ pct: number | null; detail: string }>(
+    regionalCached?.passRate ?? { pct: null, detail: "" }
+  );
+  const [examsByMonth, setExamsByMonth] = useState<{ label: string; value: number }[]>(
+    regionalCached?.examsByMonth ?? []
+  );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -52,6 +72,7 @@ export function RegionalDashboard() {
 
   const [viewingComplexe, setViewingComplexe] = useState<{ profile: Profile; complexe: Complexe } | null>(null);
   const [editingComplexe, setEditingComplexe] = useState<{ profile: Profile; complexe: Complexe } | null>(null);
+  const [deletingComplexe, setDeletingComplexe] = useState<{ profile: Profile; complexe: Complexe } | null>(null);
 
   const [sessionEtabId, setSessionEtabId] = useState("");
   const [sessionDate, setSessionDate] = useState("");
@@ -110,18 +131,32 @@ export function RegionalDashboard() {
       const label = MONTH_FORMATTER.format(new Date(sess.exam_date));
       byMonth.set(label, (byMonth.get(label) ?? 0) + 1);
     }
-    setExamsByMonth(Array.from(byMonth.entries()).map(([label, value]) => ({ label, value })));
+    const nextExamsByMonth = Array.from(byMonth.entries()).map(([label, value]) => ({ label, value }));
+    setExamsByMonth(nextExamsByMonth);
 
+    let nextComplexeProfiles: Profile[] = [];
     if (c.data && c.data.length > 0) {
       const { data: profs } = await supabase
         .from("profiles")
         .select("*")
         .eq("role", "complexe")
         .in("complexe_id", c.data.map((row) => row.id));
-      setComplexeProfiles(profs ?? []);
-    } else {
-      setComplexeProfiles([]);
+      nextComplexeProfiles = profs ?? [];
     }
+    setComplexeProfiles(nextComplexeProfiles);
+
+    writeCache<CachedRegionalData>(regionalCacheKey(regionId), {
+      complexes: c.data ?? [],
+      complexeProfiles: nextComplexeProfiles,
+      etablissements: et.data ?? [],
+      sessions: scheduleRows,
+      candidatesCount: candCount.count ?? 0,
+      passRate: {
+        pct: graded.length > 0 ? (passedCount / graded.length) * 100 : null,
+        detail: `${passedCount}/${graded.length} candidats admis`,
+      },
+      examsByMonth: nextExamsByMonth,
+    });
   }
 
   // national only: load every region for the selector, defaulting to the
@@ -139,7 +174,19 @@ export function RegionalDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isNational]);
 
-  useEffect(() => {
+  // useLayoutEffect so switching regionId (national picking a different
+  // région mid-session) repaints from that id's cached snapshot before the
+  // browser paints, instead of flashing the previous région's data.
+  useLayoutEffect(() => {
+    if (!regionId) return;
+    const snapshot = readCache<CachedRegionalData>(regionalCacheKey(regionId));
+    setComplexes(snapshot?.complexes ?? []);
+    setComplexeProfiles(snapshot?.complexeProfiles ?? []);
+    setEtablissements(snapshot?.etablissements ?? []);
+    setSessions(snapshot?.sessions ?? []);
+    setCandidatesCount(snapshot?.candidatesCount ?? 0);
+    setPassRate(snapshot?.passRate ?? { pct: null, detail: "" });
+    setExamsByMonth(snapshot?.examsByMonth ?? []);
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [regionId]);
@@ -198,13 +245,17 @@ export function RegionalDashboard() {
     refresh();
   }
 
-  async function onDeleteComplexe(p: Profile) {
-    if (!window.confirm(`Supprimer définitivement le compte de ${p.full_name} ?`)) return;
+  async function onConfirmDeleteComplexe() {
+    if (!deletingComplexe) return;
     setBusy(true);
-    const { error } = await deleteAccount(p.id);
+    const { error } = await deleteAccount(deletingComplexe.profile.id);
     setBusy(false);
-    if (error) setError(error);
-    else refresh();
+    if (error) {
+      setError(error);
+      return;
+    }
+    setDeletingComplexe(null);
+    refresh();
   }
 
   async function onScheduleSession(e: FormEvent) {
@@ -373,7 +424,7 @@ export function RegionalDashboard() {
                         onEdit={() => setEditingComplexe({ profile: p, complexe: c })}
                         onToggle={() => onToggleComplexe(p)}
                         onResetPassword={() => onResetComplexePassword(p)}
-                        onDelete={() => onDeleteComplexe(p)}
+                        onDelete={() => setDeletingComplexe({ profile: p, complexe: c })}
                       />
                     )}
                   </td>
@@ -417,6 +468,20 @@ export function RegionalDashboard() {
           busy={busy}
           onSubmit={onEditComplexeSubmit}
           onClose={() => setEditingComplexe(null)}
+        />
+      )}
+
+      {deletingComplexe && (
+        <ConfirmDeleteModal
+          title={`Supprimer — ${deletingComplexe.complexe.name}`}
+          entityName={deletingComplexe.complexe.name}
+          warning={
+            `Ce complexe compte ${etabCountFor(deletingComplexe.complexe)} établissement(s). ` +
+            "Les supprimer supprimera aussi TOUS leurs surveillants, candidats, sessions et imports."
+          }
+          busy={busy}
+          onConfirm={onConfirmDeleteComplexe}
+          onClose={() => setDeletingComplexe(null)}
         />
       )}
 

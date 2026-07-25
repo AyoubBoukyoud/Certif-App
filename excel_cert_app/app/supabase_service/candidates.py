@@ -29,6 +29,7 @@ class CandidateRecord:
     photo_path: str | None
     etablissement_id: str
     etablissement_name: str
+    complexe_name: str | None
     region_name: str | None
     exam_schedule_id: str
     mos_version: str | None
@@ -54,6 +55,7 @@ def find_by_cin(client: Client, cin: str) -> CandidateRecord | None:
         photo_path=row.get("photo_path"),
         etablissement_id=row["etablissement_id"],
         etablissement_name=row.get("etablissement_name") or "",
+        complexe_name=row.get("complexe_name"),
         region_name=row.get("region_name"),
         exam_schedule_id=row["exam_schedule_id"],
         mos_version=row.get("mos_version"),

@@ -43,6 +43,7 @@ returns table (
   photo_path text,
   etablissement_id uuid,
   etablissement_name text,
+  complexe_name text,
   region_name text,
   exam_schedule_id uuid,
   mos_version text,
@@ -56,10 +57,11 @@ set search_path = public
 as $$
   select
     c.id, c.first_name, c.last_name, c.cin, c.birth_date, c.sexe, c.filiere,
-    c.groupe, c.photo_path, c.etablissement_id, e.name, r.name,
+    c.groupe, c.photo_path, c.etablissement_id, e.name, cx.name, r.name,
     c.exam_schedule_id, s.mos_version, s.exam_date, s.start_time
   from candidates c
   join etablissements e on e.id = c.etablissement_id
+  left join complexes cx on cx.id = e.complexe_id
   left join regions r on r.id = e.region_id
   join exam_schedules s on s.id = c.exam_schedule_id
   where c.cin = p_cin

@@ -10,9 +10,14 @@
 //               etablissement of its own, so the target parent id — or a
 //               brand new region name — must be passed explicitly in the
 //               request body; see handleCreate below).
-//   - update / toggle_active / reset_password / delete : same hierarchy,
-//               acting on an existing profile the caller is allowed to
-//               manage. national may manage any non-national profile.
+//   - update / toggle_active / reset_password : same hierarchy, acting on
+//               an existing profile the caller is allowed to manage.
+//               national may manage any non-national profile.
+//   - delete  : same hierarchy/permission check, but deleting a complexe or
+//               etablissement CASCADES — every établissement/candidat/
+//               surveillant/session/import under it goes too (see
+//               0006_cascade_deletes.sql). Deleting a regional/surveillant
+//               profile only ever removes that one login.
 //
 // Deploy: supabase functions deploy manage-user
 // (needs SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / SUPABASE_ANON_KEY set as
@@ -253,13 +258,19 @@ async function handleCreate(admin: SupabaseClient, caller: CallerProfile, body: 
   }
 
   if (role === "surveillant") {
-    // Etablissement creates under itself; national must say which one.
-    const etablissementId = isNational
-      ? body.etablissement_id
-        ? String(body.etablissement_id)
-        : undefined
-      : caller.etablissement_id ?? undefined;
-    if (!etablissementId) {
+    // Etablissement creates under itself; national must say which one, or
+    // pass all_etablissements to create a "roaming" surveillant (null
+    // etablissement_id — see 0005_surveillant_all_etablissements.sql, where
+    // that null is read as "every établissement" instead of none).
+    const roaming = isNational && body.all_etablissements === true;
+    const etablissementId = roaming
+      ? null
+      : isNational
+        ? body.etablissement_id
+          ? String(body.etablissement_id)
+          : undefined
+        : caller.etablissement_id ?? undefined;
+    if (!roaming && !etablissementId) {
       return rollback(isNational ? "Établissement requis." : "Votre compte n'est rattaché à aucun établissement.");
     }
     const { error: profileError } = await admin.from("profiles").insert({
@@ -386,34 +397,75 @@ async function handleDelete(admin: SupabaseClient, caller: CallerProfile, body: 
   const { target, allowed } = await loadManageableTarget(admin, caller, profileId);
   if (!allowed || !target) return json({ error: "Non autorisé sur ce compte." }, 403);
 
-  if (target.role === "complexe") {
-    const { count } = await admin
-      .from("etablissements")
-      .select("id", { count: "exact", head: true })
-      .eq("complexe_id", target.complexe_id);
-    if ((count ?? 0) > 0) {
-      return json({ error: "Impossible de supprimer : ce complexe a des établissements rattachés." }, 400);
-    }
+  // complexe/etablissement own an entire subtree (see
+  // 0006_cascade_deletes.sql) — deleting their entity row cascades away
+  // every établissement/candidat/surveillant/session/import under it, not
+  // just the one login being acted on.
+  if (target.role === "complexe" && target.complexe_id) {
+    return await cascadeDeleteComplexe(admin, target.complexe_id);
   }
-  if (target.role === "etablissement") {
-    const { count } = await admin
-      .from("candidates")
-      .select("id", { count: "exact", head: true })
-      .eq("etablissement_id", target.etablissement_id);
-    if ((count ?? 0) > 0) {
-      return json({ error: "Impossible de supprimer : cet établissement a des candidats rattachés." }, 400);
-    }
+  if (target.role === "etablissement" && target.etablissement_id) {
+    return await cascadeDeleteEtablissement(admin, target.etablissement_id);
   }
 
-  // profiles.id -> auth.users(id) has no ON DELETE CASCADE in 0001 (plain
-  // FK, NO ACTION) — deleting the auth user first would fail with a
-  // foreign-key violation while the profile row still references it, so the
-  // profile row must go first. Entity rows (complexes/etablissements) are
-  // intentionally left as historical records.
+  // regional / surveillant: no owned entity to cascade — just this one
+  // profile + login.
+  // profiles.id -> auth.users(id) has no ON DELETE CASCADE (plain FK, NO
+  // ACTION) — deleting the auth user first would fail with a foreign-key
+  // violation while the profile row still references it, so the profile row
+  // must go first.
   const { error: profileError } = await admin.from("profiles").delete().eq("id", profileId);
   if (profileError) return json({ error: profileError.message }, 400);
 
   const { error } = await admin.auth.admin.deleteUser(profileId);
   if (error) return json({ error: error.message }, 400);
   return json({ ok: true });
+}
+
+/** Deletes every auth.users login gathered in `profileIds` — best-effort,
+ * after the profiles rows referencing them are already gone (cascaded away
+ * by the caller). A failure here leaves a login with no profile, which the
+ * dashboard already treats as "profil introuvable" — better than blocking
+ * the whole cascade over one flaky Auth Admin API call. */
+async function deleteLogins(admin: SupabaseClient, profileIds: string[]) {
+  for (const id of profileIds) {
+    await admin.auth.admin.deleteUser(id);
+  }
+}
+
+/** Deletes a complexe and its whole subtree (établissements, their
+ * surveillant/établissement accounts, candidats, sessions, imports) in one
+ * shot. 0006_cascade_deletes.sql makes the entity/profile rows disappear the
+ * moment the `complexes` row goes — this only has to collect every affected
+ * auth.users login *first* (profiles.id -> auth.users has no DB-level
+ * cascade, by design) so they can be removed once nothing references them. */
+async function cascadeDeleteComplexe(admin: SupabaseClient, complexeId: string) {
+  const { data: etabs } = await admin.from("etablissements").select("id").eq("complexe_id", complexeId);
+  const etabIds = (etabs ?? []).map((e) => e.id as string);
+
+  const { data: complexeProfiles } = await admin.from("profiles").select("id").eq("complexe_id", complexeId);
+  const profileIds = (complexeProfiles ?? []).map((p) => p.id as string);
+  if (etabIds.length > 0) {
+    const { data: etabProfiles } = await admin.from("profiles").select("id").in("etablissement_id", etabIds);
+    profileIds.push(...(etabProfiles ?? []).map((p) => p.id as string));
+  }
+
+  const { error } = await admin.from("complexes").delete().eq("id", complexeId);
+  if (error) return json({ error: error.message }, 400);
+
+  await deleteLogins(admin, profileIds);
+  return json({ ok: true, deleted_accounts: profileIds.length });
+}
+
+/** Deletes an établissement and its whole subtree (surveillant accounts,
+ * candidats, sessions, imports) — same reasoning as cascadeDeleteComplexe. */
+async function cascadeDeleteEtablissement(admin: SupabaseClient, etablissementId: string) {
+  const { data: profiles } = await admin.from("profiles").select("id").eq("etablissement_id", etablissementId);
+  const profileIds = (profiles ?? []).map((p) => p.id as string);
+
+  const { error } = await admin.from("etablissements").delete().eq("id", etablissementId);
+  if (error) return json({ error: error.message }, 400);
+
+  await deleteLogins(admin, profileIds);
+  return json({ ok: true, deleted_accounts: profileIds.length });
 }

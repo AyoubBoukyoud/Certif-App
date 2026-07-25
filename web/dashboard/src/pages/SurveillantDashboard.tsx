@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useLayoutEffect, useState, type FormEvent } from "react";
 import { useAuth } from "../lib/AuthContext";
 import { supabase } from "../lib/supabaseClient";
 import type { Database } from "../lib/database.types";
@@ -6,17 +6,30 @@ import { StatTile } from "../components/charts/StatTile";
 import { ScheduleStatusBadge } from "../components/StatusBadge";
 import { Modal } from "../components/Modal";
 import { useRealtimeTable } from "../hooks/useRealtimeTable";
+import { readCache, writeCache } from "../lib/dataCache";
 
 type ExamSchedule = Database["public"]["Tables"]["exam_schedules"]["Row"];
 type ExamSessionAttempt = Database["public"]["Tables"]["exam_sessions"]["Row"];
+
+interface CachedSurveillantData {
+  schedules: ExamSchedule[];
+  myAttemptsCount: number;
+}
+
+const surveillantCacheKey = (etablissementId: string) => `surveillant-dash:data:${etablissementId}`;
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 const INCIDENT_TYPES = ["Technique", "Comportement", "Absence", "Autre"];
 
 export function SurveillantDashboard() {
   const { profile } = useAuth();
-  const [schedules, setSchedules] = useState<ExamSchedule[]>([]);
-  const [myAttemptsCount, setMyAttemptsCount] = useState(0);
+  // Lazily hydrated from the module-level cache (see lib/dataCache) so a
+  // remount repaints the last known data immediately instead of resetting.
+  const surveillantCached = readCache<CachedSurveillantData>(
+    surveillantCacheKey(profile?.etablissement_id ?? "")
+  );
+  const [schedules, setSchedules] = useState<ExamSchedule[]>(surveillantCached?.schedules ?? []);
+  const [myAttemptsCount, setMyAttemptsCount] = useState(surveillantCached?.myAttemptsCount ?? 0);
   const [error, setError] = useState<string | null>(null);
 
   const [detailSchedule, setDetailSchedule] = useState<ExamSchedule | null>(null);
@@ -43,11 +56,24 @@ export function SurveillantDashboard() {
       setError(s.error.message);
       return;
     }
-    setSchedules(s.data ?? []);
-    setMyAttemptsCount(myAttempts.count ?? 0);
+    const nextSchedules = s.data ?? [];
+    const nextMyAttemptsCount = myAttempts.count ?? 0;
+    setSchedules(nextSchedules);
+    setMyAttemptsCount(nextMyAttemptsCount);
+    writeCache<CachedSurveillantData>(surveillantCacheKey(profile.etablissement_id), {
+      schedules: nextSchedules,
+      myAttemptsCount: nextMyAttemptsCount,
+    });
   }
 
-  useEffect(() => {
+  // useLayoutEffect so this repaints from the cached snapshot for the
+  // current établissement before the browser paints, instead of flashing
+  // an empty table for a frame on every remount.
+  useLayoutEffect(() => {
+    if (!profile?.etablissement_id) return;
+    const snapshot = readCache<CachedSurveillantData>(surveillantCacheKey(profile.etablissement_id));
+    setSchedules(snapshot?.schedules ?? []);
+    setMyAttemptsCount(snapshot?.myAttemptsCount ?? 0);
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.etablissement_id]);

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { ExamScheduleStatus, ExcelImportStatus } from "../lib/database.types";
+import type { CandidateManualStatus, ExamScheduleStatus, ExcelImportStatus } from "../lib/database.types";
 import { IconCheck } from "./icons";
 
 export type BadgeTone = "good" | "warning" | "critical" | "neutral";
@@ -45,12 +45,21 @@ export function ActiveStatusBadge({ isActive }: { isActive: boolean }) {
   );
 }
 
-/** Candidate status, derived from their exam_sessions (attempts) rows —
- * "Validé" if any attempt passed, "En cours" if one is still running,
- * "En attente" otherwise (per PROMPT_DASHBOARD_WEB.md §4.2). */
+const MANUAL_STATUS_LABELS: Record<CandidateManualStatus, { label: string; tone: BadgeTone }> = {
+  valide: { label: "Validé", tone: "good" },
+  en_cours: { label: "En cours", tone: "warning" },
+  en_attente: { label: "En attente", tone: "neutral" },
+};
+
+/** Candidate status. Normally derived from their exam_sessions (attempts)
+ * rows — "Validé" if any attempt passed, "En cours" if one is still running,
+ * "En attente" otherwise (per PROMPT_DASHBOARD_WEB.md §4.2) — but a non-null
+ * `manualStatus` (candidates.status, set from the dashboard) overrides it. */
 export function candidateStatusBadgeProps(
-  attempts: Array<{ passed: boolean | null; status: string }>
+  attempts: Array<{ passed: boolean | null; status: string }>,
+  manualStatus?: CandidateManualStatus | null
 ): { label: string; tone: BadgeTone } {
+  if (manualStatus) return MANUAL_STATUS_LABELS[manualStatus];
   if (attempts.some((a) => a.passed === true)) return { label: "Validé", tone: "good" };
   if (attempts.some((a) => a.status === "started")) return { label: "En cours", tone: "warning" };
   return { label: "En attente", tone: "neutral" };
@@ -58,9 +67,11 @@ export function candidateStatusBadgeProps(
 
 export function CandidateStatusBadge({
   attempts,
+  manualStatus,
 }: {
   attempts: Array<{ passed: boolean | null; status: string }>;
+  manualStatus?: CandidateManualStatus | null;
 }) {
-  const s = candidateStatusBadgeProps(attempts);
+  const s = candidateStatusBadgeProps(attempts, manualStatus);
   return <Badge tone={s.tone} label={s.label} icon={s.tone === "good" ? <IconCheck size={11} /> : undefined} />;
 }

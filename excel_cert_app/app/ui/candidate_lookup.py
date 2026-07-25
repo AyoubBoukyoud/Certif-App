@@ -208,6 +208,7 @@ class CandidateLookupScreen(QWidget):
             ("Date de naissance", record.birth_date or "—"),
             ("Sexe", record.sexe or "—"),
             ("Direction régionale", record.region_name or "—"),
+            ("Complexe de Formation", record.complexe_name or "—"),
             ("Établissement", record.etablissement_name or "—"),
             ("Filière", record.filiere or "—"),
             ("Groupe", record.groupe or "—"),

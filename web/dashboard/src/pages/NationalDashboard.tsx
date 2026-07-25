@@ -12,6 +12,7 @@ import { AccountDetailModal } from "../components/AccountDetailModal";
 import { AccountEditModal } from "../components/AccountEditModal";
 import { IconPlus } from "../components/icons";
 import { createAccount, toggleActive, resetPassword, updateAccount, deleteAccount } from "../lib/manageUser";
+import { readCache, writeCache } from "../lib/dataCache";
 
 type Region = Database["public"]["Tables"]["regions"]["Row"];
 type Etablissement = Database["public"]["Tables"]["etablissements"]["Row"];
@@ -33,20 +34,40 @@ interface NationalCounts {
 
 const MONTH_FORMATTER = new Intl.DateTimeFormat("fr-FR", { month: "short", year: "numeric" });
 
+interface CachedNationalData {
+  regions: Region[];
+  etablissements: Etablissement[];
+  directors: Profile[];
+  stats: NationalCounts | null;
+  examsByRegion: { label: string; value: number }[];
+  examsByMonth: { label: string; value: number }[];
+  passRate: { pct: number | null; detail: string };
+  activity: { id: number; event: string; created_at: string }[];
+}
+
+const NATIONAL_CACHE_KEY = "national-dash:data";
+
 export function NationalDashboard() {
-  const [regions, setRegions] = useState<Region[]>([]);
-  const [etablissements, setEtablissements] = useState<Etablissement[]>([]);
-  const [directors, setDirectors] = useState<Profile[]>([]);
-  const [stats, setStats] = useState<NationalCounts | null>(null);
-  const [examsByRegion, setExamsByRegion] = useState<{ label: string; value: number }[]>([]);
-  const [examsByMonth, setExamsByMonth] = useState<{ label: string; value: number }[]>([]);
-  const [passRate, setPassRate] = useState<{ pct: number | null; detail: string }>({
-    pct: null,
-    detail: "",
-  });
+  // Lazily hydrated from the module-level cache (see lib/dataCache) so a
+  // remount — e.g. clicking to another sidebar page and back — repaints the
+  // last known data immediately instead of resetting to empty.
+  const nationalCached = readCache<CachedNationalData>(NATIONAL_CACHE_KEY);
+  const [regions, setRegions] = useState<Region[]>(nationalCached?.regions ?? []);
+  const [etablissements, setEtablissements] = useState<Etablissement[]>(nationalCached?.etablissements ?? []);
+  const [directors, setDirectors] = useState<Profile[]>(nationalCached?.directors ?? []);
+  const [stats, setStats] = useState<NationalCounts | null>(nationalCached?.stats ?? null);
+  const [examsByRegion, setExamsByRegion] = useState<{ label: string; value: number }[]>(
+    nationalCached?.examsByRegion ?? []
+  );
+  const [examsByMonth, setExamsByMonth] = useState<{ label: string; value: number }[]>(
+    nationalCached?.examsByMonth ?? []
+  );
+  const [passRate, setPassRate] = useState<{ pct: number | null; detail: string }>(
+    nationalCached?.passRate ?? { pct: null, detail: "" }
+  );
   const [activity, setActivity] = useState<
     { id: number; event: string; created_at: string }[]
-  >([]);
+  >(nationalCached?.activity ?? []);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -95,16 +116,20 @@ export function NationalDashboard() {
         return;
       }
 
-      setRegions(r.data ?? []);
-      setEtablissements(e.data ?? []);
-      setDirectors(p.data ?? []);
-      setStats({
+      const nextRegions = r.data ?? [];
+      const nextEtablissements = e.data ?? [];
+      const nextDirectors = p.data ?? [];
+      const nextStats: NationalCounts = {
         regions_count: r.data?.length ?? 0,
         etablissements_count: e.data?.length ?? 0,
         surveillants_count: surveillantsCountRes.count ?? 0,
         candidats_count: candidatesCountRes.count ?? 0,
         examens_count: sessionsCountRes.count ?? 0,
-      });
+      };
+      setRegions(nextRegions);
+      setEtablissements(nextEtablissements);
+      setDirectors(nextDirectors);
+      setStats(nextStats);
 
       const sessions = (sessionsRes.data ?? []) as unknown as ExamScheduleWithRegion[];
 
@@ -116,21 +141,32 @@ export function NationalDashboard() {
         const monthLabel = MONTH_FORMATTER.format(new Date(s.exam_date));
         byMonth.set(monthLabel, (byMonth.get(monthLabel) ?? 0) + 1);
       }
-      setExamsByRegion(
-        Array.from(byRegion.entries()).map(([label, value]) => ({ label, value }))
-      );
-      setExamsByMonth(
-        Array.from(byMonth.entries()).map(([label, value]) => ({ label, value }))
-      );
+      const nextExamsByRegion = Array.from(byRegion.entries()).map(([label, value]) => ({ label, value }));
+      const nextExamsByMonth = Array.from(byMonth.entries()).map(([label, value]) => ({ label, value }));
+      setExamsByRegion(nextExamsByRegion);
+      setExamsByMonth(nextExamsByMonth);
 
       const graded = (attemptsRes.data ?? []).filter((a) => a.passed !== null);
       const passedCount = graded.filter((a) => a.passed).length;
-      setPassRate({
+      const nextPassRate = {
         pct: graded.length > 0 ? (passedCount / graded.length) * 100 : null,
         detail: `${passedCount}/${graded.length} candidats admis`,
-      });
+      };
+      setPassRate(nextPassRate);
 
-      setActivity(auditRes.data ?? []);
+      const nextActivity = auditRes.data ?? [];
+      setActivity(nextActivity);
+
+      writeCache<CachedNationalData>(NATIONAL_CACHE_KEY, {
+        regions: nextRegions,
+        etablissements: nextEtablissements,
+        directors: nextDirectors,
+        stats: nextStats,
+        examsByRegion: nextExamsByRegion,
+        examsByMonth: nextExamsByMonth,
+        passRate: nextPassRate,
+        activity: nextActivity,
+      });
   }
 
   useEffect(() => {

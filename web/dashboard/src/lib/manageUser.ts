@@ -1,3 +1,4 @@
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import { supabase } from "./supabaseClient";
 
 export type ManagedRole = "regional" | "complexe" | "etablissement" | "surveillant";
@@ -15,7 +16,21 @@ async function invoke(body: Record<string, unknown>): Promise<{ error: string | 
     "manage-user",
     { body }
   );
-  if (error) return { error: error.message };
+  if (error) {
+    // supabase-js's FunctionsHttpError.message is always the generic "Edge
+    // Function returned a non-2xx status code" — the actual reason the
+    // function sent back (e.g. "Rôle non gérable depuis ce compte.") is in
+    // the raw Response on `.context` and has to be read out separately.
+    if (error instanceof FunctionsHttpError) {
+      try {
+        const body = (await error.context.json()) as { error?: string };
+        if (body?.error) return { error: body.error };
+      } catch {
+        // context wasn't JSON (network/relay failure) — fall through
+      }
+    }
+    return { error: error.message };
+  }
   if (data && "error" in data && data.error) return { error: data.error };
   return { error: null };
 }
@@ -40,6 +55,7 @@ export function createAccount(params: {
   newRegionName?: string; // national creating 'regional' under a brand new region
   complexeId?: string; // national creating 'etablissement'
   etablissementId?: string; // national creating 'surveillant'
+  allEtablissements?: boolean; // national creating a roaming 'surveillant' (all établissements)
 }) {
   return invoke({
     action: "create",
@@ -52,6 +68,7 @@ export function createAccount(params: {
     new_region_name: params.newRegionName,
     complexe_id: params.complexeId,
     etablissement_id: params.etablissementId,
+    all_etablissements: params.allEtablissements,
   });
 }
 

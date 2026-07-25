@@ -1,18 +1,25 @@
-import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 import * as XLSX from "xlsx";
 import { useAuth } from "../lib/AuthContext";
 import { supabase } from "../lib/supabaseClient";
-import type { Database } from "../lib/database.types";
+import type { CandidateManualStatus, Database } from "../lib/database.types";
 import { mapExcelRows, type ImportRowResult } from "../lib/excelImport";
 import { ImportReport } from "../components/ImportReport";
 import { CandidateStatusBadge, ActiveStatusBadge, candidateStatusBadgeProps } from "../components/StatusBadge";
 import { CandidateDetailModal } from "../components/CandidateDetailModal";
+import {
+  CandidateFormModal,
+  EMPTY_CANDIDATE_FORM,
+  type CandidateFormValues,
+} from "../components/CandidateFormModal";
 import { Modal } from "../components/Modal";
 import { AccountRowActions } from "../components/AccountRowActions";
 import { AccountDetailModal } from "../components/AccountDetailModal";
 import { AccountEditModal } from "../components/AccountEditModal";
-import { IconPlus, IconEye } from "../components/icons";
+import { IconPlus, IconEye, IconPencil, IconTrash } from "../components/icons";
 import { createAccount, toggleActive, resetPassword, updateAccount, deleteAccount } from "../lib/manageUser";
+import { usePersistentState } from "../lib/usePersistentState";
+import { readCache, writeCache } from "../lib/dataCache";
 
 type ExamSchedule = Database["public"]["Tables"]["exam_schedules"]["Row"];
 type Candidate = Database["public"]["Tables"]["candidates"]["Row"];
@@ -23,9 +30,41 @@ interface CandidateWithAttempts extends Candidate {
   exam_sessions: Array<{ id: string; passed: boolean | null; score_pct: number | null; status: string; started_at: string | null }>;
 }
 
-const PAGE_SIZE = 20;
+interface CachedEtabData {
+  sessions: ExamSchedule[];
+  candidates: CandidateWithAttempts[];
+  surveillants: Profile[];
+  etablissementName: string;
+}
+
+const etabCacheKey = (etablissementId: string) => `etab-dash:data:${etablissementId}`;
+
+function candidateToFormValues(c: Candidate): CandidateFormValues {
+  return {
+    cin: c.cin,
+    lastName: c.last_name,
+    firstName: c.first_name,
+    nomArabe: c.nom_arabe ?? "",
+    prenomArabe: c.prenom_arabe ?? "",
+    sexe: c.sexe ?? "",
+    birthDate: c.birth_date ?? "",
+    phone: c.phone ?? "",
+    filiere: c.filiere ?? "",
+    groupe: c.groupe ?? "",
+    examScheduleId: c.exam_schedule_id ?? "",
+  };
+}
+
+const PAGE_SIZE = 10;
 const STATUS_FILTERS = [
   { value: "", label: "Tous les statuts" },
+  { value: "valide", label: "Validé" },
+  { value: "en_cours", label: "En cours" },
+  { value: "en_attente", label: "En attente" },
+];
+
+const STATUS_OPTIONS: Array<{ value: CandidateManualStatus | ""; label: string }> = [
+  { value: "", label: "Auto (calculé)" },
   { value: "valide", label: "Validé" },
   { value: "en_cours", label: "En cours" },
   { value: "en_attente", label: "En attente" },
@@ -37,13 +76,19 @@ export function EtablissementDashboard() {
   // établissement to act for, from every établissement that exists.
   const isNational = profile?.role === "national";
   const [allEtablissements, setAllEtablissements] = useState<Etablissement[]>([]);
-  const [selectedEtabId, setSelectedEtabId] = useState("");
+  const [selectedEtabId, setSelectedEtabId] = usePersistentState("etab-dash:selectedEtabId", "");
   const etablissementId = isNational ? selectedEtabId : profile?.etablissement_id ?? "";
 
-  const [sessions, setSessions] = useState<ExamSchedule[]>([]);
-  const [candidates, setCandidates] = useState<CandidateWithAttempts[]>([]);
-  const [surveillants, setSurveillants] = useState<Profile[]>([]);
-  const [etablissementName, setEtablissementName] = useState("");
+  // Lazily hydrated from the module-level cache (see lib/dataCache) so a
+  // remount — e.g. clicking to another sidebar page and back — repaints the
+  // last known data immediately instead of an empty table; refresh() below
+  // still runs every mount to keep it current, it just no longer has to
+  // pass through a visible empty state first.
+  const cached = readCache<CachedEtabData>(etabCacheKey(etablissementId));
+  const [sessions, setSessions] = useState<ExamSchedule[]>(cached?.sessions ?? []);
+  const [candidates, setCandidates] = useState<CandidateWithAttempts[]>(cached?.candidates ?? []);
+  const [surveillants, setSurveillants] = useState<Profile[]>(cached?.surveillants ?? []);
+  const [etablissementName, setEtablissementName] = useState(cached?.etablissementName ?? "");
   const [sessionId, setSessionId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -51,22 +96,25 @@ export function EtablissementDashboard() {
   const [importing, setImporting] = useState(false);
   const [importResults, setImportResults] = useState<ImportRowResult[] | null>(null);
 
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [page, setPage] = useState(1);
+  const [search, setSearch] = usePersistentState("etab-dash:search", "");
+  const [statusFilter, setStatusFilter] = usePersistentState("etab-dash:statusFilter", "");
+  const [page, setPage] = usePersistentState("etab-dash:page", 1);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
+  const [showNewCandidate, setShowNewCandidate] = useState(false);
+  const [editingCandidate, setEditingCandidate] = useState<CandidateWithAttempts | null>(null);
 
   const [showNewSurveillant, setShowNewSurveillant] = useState(false);
   const [newSvName, setNewSvName] = useState("");
   const [newSvEmail, setNewSvEmail] = useState("");
   const [newSvPassword, setNewSvPassword] = useState("");
+  const [newSvAllEtab, setNewSvAllEtab] = useState(false);
 
   const [viewingSurveillant, setViewingSurveillant] = useState<Profile | null>(null);
   const [editingSurveillant, setEditingSurveillant] = useState<Profile | null>(null);
 
   async function refresh() {
     if (!etablissementId) return;
-    const [s, c, et, sv] = await Promise.all([
+    const [s, c, et, sv, roamingSv] = await Promise.all([
       supabase
         .from("exam_schedules")
         .select("*")
@@ -79,15 +127,32 @@ export function EtablissementDashboard() {
         .order("last_name"),
       supabase.from("etablissements").select("name").eq("id", etablissementId).single(),
       supabase.from("profiles").select("*").eq("role", "surveillant").eq("etablissement_id", etablissementId),
+      // Roaming surveillants (etablissement_id null = "tous établissements", see
+      // 0005_surveillant_all_etablissements.sql) never match the .eq() above —
+      // fetch them separately (national-only, since only national can create
+      // one) so they still show up and stay manageable from this page.
+      isNational
+        ? supabase.from("profiles").select("*").eq("role", "surveillant").is("etablissement_id", null)
+        : Promise.resolve({ data: [] as Profile[], error: null }),
     ]);
     if (s.error || c.error) {
       setError(s.error?.message ?? c.error?.message ?? "Erreur");
       return;
     }
-    setSessions(s.data ?? []);
-    setCandidates((c.data as unknown as CandidateWithAttempts[]) ?? []);
-    setEtablissementName(et.data?.name ?? "");
-    setSurveillants(sv.data ?? []);
+    const nextSessions = s.data ?? [];
+    const nextCandidates = (c.data as unknown as CandidateWithAttempts[]) ?? [];
+    const nextEtablissementName = et.data?.name ?? "";
+    const nextSurveillants = [...(sv.data ?? []), ...(roamingSv.data ?? [])];
+    setSessions(nextSessions);
+    setCandidates(nextCandidates);
+    setEtablissementName(nextEtablissementName);
+    setSurveillants(nextSurveillants);
+    writeCache<CachedEtabData>(etabCacheKey(etablissementId), {
+      sessions: nextSessions,
+      candidates: nextCandidates,
+      surveillants: nextSurveillants,
+      etablissementName: nextEtablissementName,
+    });
   }
 
   // national only: load every établissement for the selector, defaulting to
@@ -105,7 +170,18 @@ export function EtablissementDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isNational]);
 
-  useEffect(() => {
+  // useLayoutEffect (not useEffect) so a switch of etablissementId (national
+  // picking a different établissement mid-session) repaints from that id's
+  // cached snapshot — or clears to empty if never visited — before the
+  // browser paints, instead of flashing the previous établissement's data
+  // for a frame. refresh() then updates it underneath with the live fetch.
+  useLayoutEffect(() => {
+    if (!etablissementId) return;
+    const snapshot = readCache<CachedEtabData>(etabCacheKey(etablissementId));
+    setSessions(snapshot?.sessions ?? []);
+    setCandidates(snapshot?.candidates ?? []);
+    setSurveillants(snapshot?.surveillants ?? []);
+    setEtablissementName(snapshot?.etablissementName ?? "");
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [etablissementId]);
@@ -172,6 +248,86 @@ export function EtablissementDashboard() {
     }
   }
 
+  async function onCreateCandidateSubmit(values: CandidateFormValues) {
+    setError(null);
+    setBusy(true);
+    const { error } = await supabase.from("candidates").insert({
+      etablissement_id: etablissementId,
+      cin: values.cin.trim().toUpperCase(),
+      last_name: values.lastName.trim(),
+      first_name: values.firstName.trim(),
+      nom_arabe: values.nomArabe || null,
+      prenom_arabe: values.prenomArabe || null,
+      sexe: values.sexe || null,
+      birth_date: values.birthDate || null,
+      phone: values.phone || null,
+      filiere: values.filiere || null,
+      groupe: values.groupe || null,
+      exam_schedule_id: values.examScheduleId || null,
+    });
+    setBusy(false);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setShowNewCandidate(false);
+    refresh();
+  }
+
+  async function onEditCandidateSubmit(values: CandidateFormValues) {
+    if (!editingCandidate) return;
+    setError(null);
+    setBusy(true);
+    const { error } = await supabase
+      .from("candidates")
+      .update({
+        cin: values.cin.trim().toUpperCase(),
+        last_name: values.lastName.trim(),
+        first_name: values.firstName.trim(),
+        nom_arabe: values.nomArabe || null,
+        prenom_arabe: values.prenomArabe || null,
+        sexe: values.sexe || null,
+        birth_date: values.birthDate || null,
+        phone: values.phone || null,
+        filiere: values.filiere || null,
+        groupe: values.groupe || null,
+        exam_schedule_id: values.examScheduleId || null,
+      })
+      .eq("id", editingCandidate.id);
+    setBusy(false);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setEditingCandidate(null);
+    refresh();
+  }
+
+  async function onChangeCandidateStatus(c: CandidateWithAttempts, status: CandidateManualStatus | "") {
+    setError(null);
+    setBusy(true);
+    const { error } = await supabase
+      .from("candidates")
+      .update({ status: status || null })
+      .eq("id", c.id);
+    setBusy(false);
+    if (error) setError(error.message);
+    else refresh();
+  }
+
+  async function onDeleteCandidate(c: CandidateWithAttempts) {
+    if (c.exam_sessions.length > 0) {
+      setError("Impossible de supprimer : ce candidat a des tentatives d'examen enregistrées.");
+      return;
+    }
+    if (!window.confirm(`Supprimer définitivement le candidat ${c.first_name} ${c.last_name} ?`)) return;
+    setBusy(true);
+    const { error } = await supabase.from("candidates").delete().eq("id", c.id);
+    setBusy(false);
+    if (error) setError(error.message);
+    else refresh();
+  }
+
   const filteredCandidates = useMemo(() => {
     const q = search.trim().toLowerCase();
     return candidates.filter((c) => {
@@ -180,7 +336,7 @@ export function EtablissementDashboard() {
         if (!hay.includes(q)) return false;
       }
       if (statusFilter) {
-        const { tone } = candidateStatusBadgeProps(c.exam_sessions);
+        const { tone } = candidateStatusBadgeProps(c.exam_sessions, c.status as CandidateManualStatus | null);
         const bucket = tone === "good" ? "valide" : tone === "warning" ? "en_cours" : "en_attente";
         if (bucket !== statusFilter) return false;
       }
@@ -189,18 +345,25 @@ export function EtablissementDashboard() {
   }, [candidates, search, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredCandidates.length / PAGE_SIZE));
+  // page is persisted across visits (usePersistentState) — clamp it in case
+  // the candidate list shrank since the last time this page was open.
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages, setPage]);
   const pageCandidates = filteredCandidates.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   async function onCreateSurveillant(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setBusy(true);
+    const roaming = isNational && newSvAllEtab;
     const { error } = await createAccount({
       role: "surveillant",
       email: newSvEmail,
       password: newSvPassword,
       fullName: newSvName,
-      etablissementId: isNational ? etablissementId : undefined,
+      etablissementId: roaming ? undefined : isNational ? etablissementId : undefined,
+      allEtablissements: roaming,
     });
     setBusy(false);
     if (error) {
@@ -211,6 +374,7 @@ export function EtablissementDashboard() {
     setNewSvName("");
     setNewSvEmail("");
     setNewSvPassword("");
+    setNewSvAllEtab(false);
     refresh();
   }
 
@@ -321,6 +485,9 @@ export function EtablissementDashboard() {
               </option>
             ))}
           </select>
+          <button className="btn-icon-label" onClick={() => setShowNewCandidate(true)}>
+            <IconPlus size={14} /> Nouveau stagiaire
+          </button>
         </div>
         <table>
           <thead>
@@ -339,16 +506,46 @@ export function EtablissementDashboard() {
                 <td>{c.last_name}</td>
                 <td>{c.first_name}</td>
                 <td>
-                  <CandidateStatusBadge attempts={c.exam_sessions} />
+                  <div className="row-actions">
+                    <CandidateStatusBadge
+                      attempts={c.exam_sessions}
+                      manualStatus={c.status as CandidateManualStatus | null}
+                    />
+                    <select
+                      aria-label={`Changer le statut de ${c.first_name} ${c.last_name}`}
+                      value={c.status ?? ""}
+                      disabled={busy}
+                      onChange={(e) => onChangeCandidateStatus(c, e.target.value as CandidateManualStatus | "")}
+                    >
+                      {STATUS_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </td>
                 <td>
-                  <button
-                    className="btn-icon-label"
-                    onClick={() => setSelectedCandidate(c)}
-                    aria-label="Voir le détail"
-                  >
-                    <IconEye size={14} /> Détail
-                  </button>
+                  <div className="row-actions">
+                    <button
+                      className="btn-icon-label"
+                      onClick={() => setSelectedCandidate(c)}
+                      aria-label="Voir le détail"
+                    >
+                      <IconEye size={14} /> Détail
+                    </button>
+                    <button onClick={() => setEditingCandidate(c)} title="Modifier" aria-label="Modifier">
+                      <IconPencil size={14} />
+                    </button>
+                    <button
+                      onClick={() => onDeleteCandidate(c)}
+                      title="Supprimer"
+                      aria-label="Supprimer"
+                      className="danger"
+                    >
+                      <IconTrash size={14} />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -382,6 +579,28 @@ export function EtablissementDashboard() {
         />
       )}
 
+      {showNewCandidate && (
+        <CandidateFormModal
+          title="Nouveau stagiaire"
+          initialValues={EMPTY_CANDIDATE_FORM}
+          sessions={sessions}
+          busy={busy}
+          onSubmit={onCreateCandidateSubmit}
+          onClose={() => setShowNewCandidate(false)}
+        />
+      )}
+
+      {editingCandidate && (
+        <CandidateFormModal
+          title={`Modifier — ${editingCandidate.first_name} ${editingCandidate.last_name}`}
+          initialValues={candidateToFormValues(editingCandidate)}
+          sessions={sessions}
+          busy={busy}
+          onSubmit={onEditCandidateSubmit}
+          onClose={() => setEditingCandidate(null)}
+        />
+      )}
+
       <section className="card">
         <h2>Comptes surveillant</h2>
         <table>
@@ -389,6 +608,7 @@ export function EtablissementDashboard() {
             <tr>
               <th>Nom</th>
               <th>Email</th>
+              {isNational && <th>Portée</th>}
               <th>Statut</th>
               <th>Actions</th>
             </tr>
@@ -398,6 +618,7 @@ export function EtablissementDashboard() {
               <tr key={sv.id}>
                 <td>{sv.full_name}</td>
                 <td>{sv.login ?? "—"}</td>
+                {isNational && <td>{sv.etablissement_id === null ? "Tous établissements" : etablissementName}</td>}
                 <td>
                   <ActiveStatusBadge isActive={sv.is_active} />
                 </td>
@@ -416,7 +637,7 @@ export function EtablissementDashboard() {
             ))}
             {surveillants.length === 0 && (
               <tr>
-                <td colSpan={4}>Aucun surveillant.</td>
+                <td colSpan={isNational ? 5 : 4}>Aucun surveillant.</td>
               </tr>
             )}
           </tbody>
@@ -433,7 +654,7 @@ export function EtablissementDashboard() {
           fields={[
             ["Nom complet", viewingSurveillant.full_name],
             ["Email (login)", viewingSurveillant.login],
-            ["Établissement", etablissementName],
+            ["Établissement", viewingSurveillant.etablissement_id === null ? "Tous établissements" : etablissementName],
             ["Statut", viewingSurveillant.is_active ? "Actif" : "Désactivé"],
             ["Créé le", new Date(viewingSurveillant.created_at).toLocaleString("fr-FR")],
           ]}
@@ -475,6 +696,16 @@ export function EtablissementDashboard() {
               minLength={8}
               required
             />
+            {isNational && (
+              <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <input
+                  type="checkbox"
+                  checked={newSvAllEtab}
+                  onChange={(e) => setNewSvAllEtab(e.target.checked)}
+                />
+                Surveillant pour tous les établissements
+              </label>
+            )}
             <button type="submit" disabled={busy}>
               {busy ? "Création…" : "Créer"}
             </button>

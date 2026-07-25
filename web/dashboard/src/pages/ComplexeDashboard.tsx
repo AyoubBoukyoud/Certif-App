@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState, type FormEvent } from "react";
 import { useAuth } from "../lib/AuthContext";
 import { supabase } from "../lib/supabaseClient";
 import type { Database } from "../lib/database.types";
@@ -8,9 +8,12 @@ import { Modal } from "../components/Modal";
 import { AccountRowActions } from "../components/AccountRowActions";
 import { AccountDetailModal } from "../components/AccountDetailModal";
 import { AccountEditModal } from "../components/AccountEditModal";
+import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import { IconPlus } from "../components/icons";
 import { createAccount, toggleActive, resetPassword, updateAccount, deleteAccount } from "../lib/manageUser";
 import { useRealtimeTable } from "../hooks/useRealtimeTable";
+import { usePersistentState } from "../lib/usePersistentState";
+import { readCache, writeCache } from "../lib/dataCache";
 
 type Etablissement = Database["public"]["Tables"]["etablissements"]["Row"];
 type ExamSchedule = Database["public"]["Tables"]["exam_schedules"]["Row"];
@@ -21,6 +24,16 @@ interface ComplexeWithRegion extends Complexe {
   regions: { name: string } | null;
 }
 
+interface CachedComplexeData {
+  etablissements: Etablissement[];
+  etabProfiles: Profile[];
+  sessions: ExamSchedule[];
+  presentCounts: Record<string, number>;
+  incidents: IncidentReport[];
+}
+
+const complexeCacheKey = (complexeId: string) => `complexe-dash:data:${complexeId}`;
+
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
 export function ComplexeDashboard() {
@@ -30,20 +43,24 @@ export function ComplexeDashboard() {
   // exists (across all regions).
   const isNational = profile?.role === "national";
   const [allComplexes, setAllComplexes] = useState<ComplexeWithRegion[]>([]);
-  const [selectedComplexeId, setSelectedComplexeId] = useState("");
+  const [selectedComplexeId, setSelectedComplexeId] = usePersistentState("complexe-dash:selectedComplexeId", "");
   const complexeId = isNational ? selectedComplexeId : profile?.complexe_id ?? "";
 
-  const [etablissements, setEtablissements] = useState<Etablissement[]>([]);
-  const [etabProfiles, setEtabProfiles] = useState<Profile[]>([]);
-  const [sessions, setSessions] = useState<ExamSchedule[]>([]);
-  const [presentCounts, setPresentCounts] = useState<Record<string, number>>({});
-  const [incidents, setIncidents] = useState<IncidentReport[]>([]);
+  // Lazily hydrated from the module-level cache (see lib/dataCache) so a
+  // remount — e.g. clicking to another sidebar page and back — repaints the
+  // last known data immediately instead of resetting to empty.
+  const complexeCached = readCache<CachedComplexeData>(complexeCacheKey(complexeId));
+  const [etablissements, setEtablissements] = useState<Etablissement[]>(complexeCached?.etablissements ?? []);
+  const [etabProfiles, setEtabProfiles] = useState<Profile[]>(complexeCached?.etabProfiles ?? []);
+  const [sessions, setSessions] = useState<ExamSchedule[]>(complexeCached?.sessions ?? []);
+  const [presentCounts, setPresentCounts] = useState<Record<string, number>>(complexeCached?.presentCounts ?? {});
+  const [incidents, setIncidents] = useState<IncidentReport[]>(complexeCached?.incidents ?? []);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const [filterEtab, setFilterEtab] = useState("");
-  const [filterDate, setFilterDate] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
+  const [filterEtab, setFilterEtab] = usePersistentState("complexe-dash:filterEtab", "");
+  const [filterDate, setFilterDate] = usePersistentState("complexe-dash:filterDate", "");
+  const [filterStatus, setFilterStatus] = usePersistentState("complexe-dash:filterStatus", "");
 
   const [showNewEtab, setShowNewEtab] = useState(false);
   const [newEtabName, setNewEtabName] = useState("");
@@ -52,6 +69,7 @@ export function ComplexeDashboard() {
 
   const [viewingEtab, setViewingEtab] = useState<{ profile: Profile; etab: Etablissement } | null>(null);
   const [editingEtab, setEditingEtab] = useState<{ profile: Profile; etab: Etablissement } | null>(null);
+  const [deletingEtab, setDeletingEtab] = useState<{ profile: Profile; etab: Etablissement } | null>(null);
 
   async function refresh() {
     if (!complexeId) return;
@@ -88,24 +106,32 @@ export function ComplexeDashboard() {
             .limit(10)
         : Promise.resolve({ data: [] as IncidentReport[], error: null }),
     ]);
-    setEtabProfiles(profs.data ?? []);
-    setIncidents(incidentsRes.data ?? []);
+    const nextEtabProfiles = profs.data ?? [];
+    const nextIncidents = incidentsRes.data ?? [];
+    setEtabProfiles(nextEtabProfiles);
+    setIncidents(nextIncidents);
 
     const inProgressIds = scheduleRows.filter((r) => r.status === "in_progress").map((r) => r.id);
+    const nextPresentCounts: Record<string, number> = {};
     if (inProgressIds.length > 0) {
       const { data: attempts } = await supabase
         .from("exam_sessions")
         .select("exam_schedule_id")
         .eq("status", "started")
         .in("exam_schedule_id", inProgressIds);
-      const counts: Record<string, number> = {};
       for (const a of attempts ?? []) {
-        counts[a.exam_schedule_id] = (counts[a.exam_schedule_id] ?? 0) + 1;
+        nextPresentCounts[a.exam_schedule_id] = (nextPresentCounts[a.exam_schedule_id] ?? 0) + 1;
       }
-      setPresentCounts(counts);
-    } else {
-      setPresentCounts({});
     }
+    setPresentCounts(nextPresentCounts);
+
+    writeCache<CachedComplexeData>(complexeCacheKey(complexeId), {
+      etablissements: etabRows,
+      etabProfiles: nextEtabProfiles,
+      sessions: scheduleRows,
+      presentCounts: nextPresentCounts,
+      incidents: nextIncidents,
+    });
   }
 
   // national only: load every complexe (with its region name) for the
@@ -124,7 +150,17 @@ export function ComplexeDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isNational]);
 
-  useEffect(() => {
+  // useLayoutEffect so switching complexeId (national picking a different
+  // complexe mid-session) repaints from that id's cached snapshot before the
+  // browser paints, instead of flashing the previous complexe's data.
+  useLayoutEffect(() => {
+    if (!complexeId) return;
+    const snapshot = readCache<CachedComplexeData>(complexeCacheKey(complexeId));
+    setEtablissements(snapshot?.etablissements ?? []);
+    setEtabProfiles(snapshot?.etabProfiles ?? []);
+    setSessions(snapshot?.sessions ?? []);
+    setPresentCounts(snapshot?.presentCounts ?? {});
+    setIncidents(snapshot?.incidents ?? []);
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [complexeId]);
@@ -187,13 +223,17 @@ export function ComplexeDashboard() {
     refresh();
   }
 
-  async function onDeleteEtab(p: Profile) {
-    if (!window.confirm(`Supprimer définitivement le compte de ${p.full_name} ?`)) return;
+  async function onConfirmDeleteEtab() {
+    if (!deletingEtab) return;
     setBusy(true);
-    const { error } = await deleteAccount(p.id);
+    const { error } = await deleteAccount(deletingEtab.profile.id);
     setBusy(false);
-    if (error) setError(error);
-    else refresh();
+    if (error) {
+      setError(error);
+      return;
+    }
+    setDeletingEtab(null);
+    refresh();
   }
 
   const profileForEtab = (e: Etablissement) => etabProfiles.find((p) => p.etablissement_id === e.id);
@@ -294,7 +334,7 @@ export function ComplexeDashboard() {
                         onEdit={() => setEditingEtab({ profile: p, etab: e })}
                         onToggle={() => onToggleEtab(p)}
                         onResetPassword={() => onResetEtabPassword(p)}
-                        onDelete={() => onDeleteEtab(p)}
+                        onDelete={() => setDeletingEtab({ profile: p, etab: e })}
                       />
                     )}
                   </td>
@@ -337,6 +377,17 @@ export function ComplexeDashboard() {
           busy={busy}
           onSubmit={onEditEtabSubmit}
           onClose={() => setEditingEtab(null)}
+        />
+      )}
+
+      {deletingEtab && (
+        <ConfirmDeleteModal
+          title={`Supprimer — ${deletingEtab.etab.name}`}
+          entityName={deletingEtab.etab.name}
+          warning="Tous les surveillants, candidats, sessions et imports de cet établissement seront supprimés définitivement."
+          busy={busy}
+          onConfirm={onConfirmDeleteEtab}
+          onClose={() => setDeletingEtab(null)}
         />
       )}
 

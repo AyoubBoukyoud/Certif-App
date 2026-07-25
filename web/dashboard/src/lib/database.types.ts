@@ -9,6 +9,11 @@ export type ExamSessionStatus = "started" | "terminated";
 
 export type ExcelImportStatus = "en_cours" | "termine" | "erreur";
 
+// Manual override of the badge normally derived from exam_sessions attempts
+// (see candidateStatusBadgeProps) — set from the dashboard, e.g. to mark a
+// candidate exempted/validated outside the kiosk flow. NULL = derive as before.
+export type CandidateManualStatus = "valide" | "en_cours" | "en_attente";
+
 export type UserRole = "national" | "regional" | "complexe" | "etablissement" | "surveillant";
 
 export interface Database {
@@ -159,6 +164,7 @@ export interface Database {
           adresse: string | null;
           nationalite: string | null;
           id_inscription_session: string | null;
+          status: CandidateManualStatus | null;
           created_at: string;
         };
         Insert: {
@@ -199,6 +205,7 @@ export interface Database {
           adresse?: string | null;
           nationalite?: string | null;
           id_inscription_session?: string | null;
+          status?: CandidateManualStatus | null;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["candidates"]["Insert"]>;
